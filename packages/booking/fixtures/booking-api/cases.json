@@ -1,0 +1,279 @@
+{
+  "about": "API v1 of the Booking routes, as request and response pairs: the contract `convex/booking.test.ts` runs against the deployment and the `@daybreak/booking` package's tests run against a fake one. The OpenAPI document (`convex/bookingApi.ts`, served at `GET /book/v1/openapi.json`) describes every response here. `given` is the deployment each case starts from, which booking.test.ts builds: `a link` is one listed Booking link, `meet`, titled Meet with Sam, host Sam, lengths 15, 30, and 60 minutes, 30 by default, meeting on Meet, with no notice or buffer, 60 Days ahead, and the default Booking hours of 9a to 6p on weekdays in America/Los_Angeles, on an empty calendar, at Thursday 2026-10-08 8a there. Each also holds one live booking key, `dbk_example-booking-key`; `a booking at 2p` has Ana de Lima booked Friday 2026-10-09 at 2p for 30 minutes; `invites nearly used` has six bookings today, each of a booker and five guests, 36 of the day's 40 invites; `paused` has bookings paused (`bookingOff`). The deployment's address is `https://your-deployment.convex.site`. Each case answers the same without `/v1` in its path, as the routes did before v1, unless `unversioned` is false. Times are milliseconds since epoch. Every name, address, and key is made up.",
+  "cases": [
+    {
+      "name": "links",
+      "given": "a link",
+      "request": {
+        "method": "GET",
+        "path": "/book/v1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "api": 1,
+          "backendVersion": "dev",
+          "links": [
+            {
+              "lengths": [
+                15,
+                30,
+                60
+              ],
+              "slug": "meet",
+              "title": "Meet with Sam"
+            }
+          ],
+          "howToBook": [
+            "GET https://your-deployment.convex.site/book/v1/<slug>?from=YYYY-MM-DD&days=7 gives the link's open time, Day by Day, in milliseconds since epoch, with `timeZone`, the host's Home time zone, and `suggested`, the starts best for the host.",
+            "POST https://your-deployment.convex.site/book/v1/<slug> with {\"start\": <ms>, \"length\": <minutes from the link's lengths>, \"name\", \"email\", \"about\"?: \"<what it's about, one line>\", \"linkedin\"?: \"<linkedin.com address>\", \"phone\"?: \"<phone number, with + and the country code outside the US>\", \"guests\"?: [{\"email\", \"name\"?}] (up to 5, each invited too), \"meetingName\"?: \"<up to 40 characters, which the title leads with>\", \"requestId\"?: \"<20+ characters 0-9 and a-v, the same on a retry>\"} books it. Google emails the invite.",
+            "A start is on the quarter hour and must fit inside one open stretch. 409 means the time was taken; pick another.",
+            "GET https://your-deployment.convex.site/book/v1/openapi.json is the OpenAPI document, with every error each route answers."
+          ]
+        }
+      }
+    },
+    {
+      "name": "page",
+      "given": "a link",
+      "request": {
+        "method": "GET",
+        "path": "/book/v1/meet?from=2026-10-09&days=2"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "days": [
+            {
+              "day": "2026-10-09",
+              "open": [
+                {
+                  "end": 1791594000000,
+                  "start": 1791561600000
+                }
+              ]
+            },
+            {
+              "day": "2026-10-10",
+              "open": []
+            }
+          ],
+          "firstDay": "2026-10-08",
+          "lastDay": "2026-12-06",
+          "link": {
+            "call": {
+              "kind": "meet"
+            },
+            "defaultLength": 30,
+            "host": "Sam",
+            "lengths": [
+              15,
+              30,
+              60
+            ],
+            "slug": "meet",
+            "title": "Meet with Sam"
+          },
+          "suggested": [
+            1791561600000
+          ],
+          "timeZone": "America/Los_Angeles"
+        }
+      }
+    },
+    {
+      "name": "book",
+      "given": "a link",
+      "request": {
+        "method": "POST",
+        "path": "/book/v1/meet",
+        "headers": {
+          "X-Daybreak-Booking-Key": "dbk_example-booking-key",
+          "X-Daybreak-Booking-Client": "203.0.113.7"
+        },
+        "body": {
+          "start": 1791579600000,
+          "length": 30,
+          "name": "Ana de Lima",
+          "email": "ana@example.com",
+          "about": "Quarterly planning",
+          "requestId": "0123456789abcdefghijklmnop"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "booked": {
+            "end": 1791581400000,
+            "start": 1791579600000,
+            "title": "Ana 🤝 Sam"
+          }
+        }
+      }
+    },
+    {
+      "name": "taken",
+      "given": "a booking at 2p",
+      "request": {
+        "method": "POST",
+        "path": "/book/v1/meet",
+        "body": {
+          "start": 1791579600000,
+          "length": 30,
+          "name": "Bo Chen",
+          "email": "bo@example.com"
+        }
+      },
+      "response": {
+        "status": 409,
+        "body": {
+          "error": {
+            "code": "taken",
+            "message": "That time was just taken. Pick another."
+          }
+        }
+      }
+    },
+    {
+      "name": "too_many",
+      "given": "invites nearly used",
+      "request": {
+        "method": "POST",
+        "path": "/book/v1/meet",
+        "headers": {
+          "X-Daybreak-Booking-Key": "dbk_example-booking-key",
+          "X-Daybreak-Booking-Client": "198.51.100.20"
+        },
+        "body": {
+          "start": 1791907200000,
+          "length": 30,
+          "name": "Cy Diaz",
+          "email": "cy@example.com",
+          "guests": [
+            {
+              "email": "g1@example.com"
+            },
+            {
+              "email": "g2@example.com"
+            },
+            {
+              "email": "g3@example.com"
+            },
+            {
+              "email": "g4@example.com"
+            },
+            {
+              "email": "g5@example.com",
+              "name": "Eve Ford"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 429,
+        "body": {
+          "error": {
+            "code": "too_many",
+            "message": "Sam has taken a lot of bookings today. Try again tomorrow."
+          }
+        }
+      }
+    },
+    {
+      "name": "invalid",
+      "given": "a link",
+      "request": {
+        "method": "POST",
+        "path": "/book/v1/meet",
+        "body": {
+          "start": 1791579900000,
+          "length": 30,
+          "name": "Ana de Lima",
+          "email": "ana@example.com"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": {
+            "code": "invalid",
+            "message": "A booking starts on the quarter hour, in milliseconds since epoch"
+          }
+        }
+      }
+    },
+    {
+      "name": "not_found",
+      "given": "a link",
+      "request": {
+        "method": "GET",
+        "path": "/book/v1/nowhere"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "code": "not_found",
+            "message": "No such Booking link"
+          }
+        }
+      }
+    },
+    {
+      "name": "closed",
+      "given": "paused",
+      "request": {
+        "method": "GET",
+        "path": "/book/v1/meet?from=2026-10-09&days=1"
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "code": "closed",
+            "message": "Sam isn't taking bookings right now."
+          }
+        }
+      }
+    },
+    {
+      "name": "key",
+      "given": "a link",
+      "unversioned": false,
+      "request": {
+        "method": "GET",
+        "path": "/book/v1/key",
+        "headers": {
+          "X-Daybreak-Booking-Key": "dbk_example-booking-key"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "unknown key",
+      "given": "a link",
+      "unversioned": false,
+      "request": {
+        "method": "GET",
+        "path": "/book/v1/key",
+        "headers": {
+          "X-Daybreak-Booking-Key": "dbk_unknownunknownunknownunknownunknown0"
+        }
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "error": {
+            "code": "unauthenticated",
+            "message": "Unknown or revoked booking key"
+          }
+        }
+      }
+    }
+  ]
+}

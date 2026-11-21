@@ -1,0 +1,79 @@
+{
+  "name": "@daybreak/booking",
+  "version": "0.1.0",
+  "description": "Booking pages for Daybreak: a server client, a proxy handler, and the booking page as a React component and a custom element.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "./dist/element/index.js",
+    "./dist/element.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    },
+    "./element": {
+      "types": "./dist/element/index.d.ts",
+      "default": "./dist/element.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./openapi.json": "./fixtures/openapi.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "daybreak",
+    "booking",
+    "scheduling",
+    "calendar",
+    "react",
+    "custom-element"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate-types.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node scripts/build.mjs && vitest run",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.13",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.25.12",
+    "jsdom": "^27.4.0",
+    "openapi-typescript": "^7.13.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "~5.9",
+    "vitest": "^4.1.12"
+  }
+}

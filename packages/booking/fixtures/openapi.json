@@ -1,0 +1,743 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Daybreak Booking API",
+    "version": "1",
+    "description": "Read a Daybreak user's open time and book it, from a server or an agent. No token is needed. `/book/v1` and `/book/v1/{slug}` also answer without `/v1`, as they did before v1, and always will; `/book/v1/key` and `/book/v1/openapi.json` have no such path. Errors answer `{ \"error\": { \"code\", \"message\" } }`. There's no CORS: call it from a server, never a browser."
+  },
+  "servers": [
+    {
+      "url": "https://your-deployment.convex.site"
+    }
+  ],
+  "paths": {
+    "/book/v1": {
+      "get": {
+        "operationId": "links",
+        "summary": "The listed links, how to book, and the API's version.",
+        "responses": {
+          "200": {
+            "description": "The listed links. None while the host has paused bookings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Index"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/book/v1/key": {
+      "get": {
+        "operationId": "checkKey",
+        "summary": "Whether a booking key is live.",
+        "parameters": [
+          {
+            "name": "X-Daybreak-Booking-Key",
+            "in": "header",
+            "required": true,
+            "description": "A booking key, a `booking` Device's token, which a website's server holds. A live key counts its callers apart for the per-caller limit, by `X-Daybreak-Booking-Client`. Without one, or with an unknown or revoked one, a call shares the direct limit of 5 bookings a day.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The key is live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No key, or an unknown or revoked one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "unauthenticated"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/book/v1/{slug}": {
+      "get": {
+        "operationId": "page",
+        "summary": "A link's open time, Day by Day, and the starts best for the host.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The Booking link's address.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,64}$"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "The first Day to read. Days before the first bookable one are skipped.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "A Day, YYYY-MM-DD, in the host's Home time zone."
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "description": "How many Days to read, 1 to 28, 7 unless given.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 28
+            }
+          },
+          {
+            "name": "X-Daybreak-Booking-Key",
+            "in": "header",
+            "required": false,
+            "description": "A booking key, a `booking` Device's token, which a website's server holds. A live key counts its callers apart for the per-caller limit, by `X-Daybreak-Booking-Client`. Without one, or with an unknown or revoked one, a call shares the direct limit of 5 bookings a day.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Daybreak-Booking-Client",
+            "in": "header",
+            "required": false,
+            "description": "The address of the visitor a website's server books for, beside its booking key.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link's page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`from` isn't a Day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "invalid"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No link has that address, or it's off.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The host has paused bookings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "closed"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "book",
+        "summary": "Books a time. Google emails the invite to the booker and their guests.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The Booking link's address.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,64}$"
+            }
+          },
+          {
+            "name": "X-Daybreak-Booking-Key",
+            "in": "header",
+            "required": false,
+            "description": "A booking key, a `booking` Device's token, which a website's server holds. A live key counts its callers apart for the per-caller limit, by `X-Daybreak-Booking-Client`. Without one, or with an unknown or revoked one, a call shares the direct limit of 5 bookings a day.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Daybreak-Booking-Client",
+            "in": "header",
+            "required": false,
+            "description": "The address of the visitor a website's server books for, beside its booking key.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Booked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booked"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A field is missing or doesn't read, or the request ID was used for another booking.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "invalid"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No link has that address, or it's off.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The time isn't open anymore. Pick another.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "taken"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many bookings from this caller, this address, or for the host today. Try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "too_many"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The host has paused bookings, or can't take them right now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "closed"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Index": {
+        "type": "object",
+        "required": [
+          "api",
+          "backendVersion",
+          "links",
+          "howToBook"
+        ],
+        "properties": {
+          "api": {
+            "const": 1
+          },
+          "backendVersion": {
+            "type": "string",
+            "description": "The Release or commit the deployment runs, or \"dev\"."
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListedLink"
+            }
+          },
+          "howToBook": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The routes in words, for an agent."
+          }
+        }
+      },
+      "ListedLink": {
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "lengths"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "lengths": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Minutes."
+          }
+        }
+      },
+      "Link": {
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "host",
+          "lengths",
+          "defaultLength",
+          "call"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "lengths": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Minutes."
+          },
+          "defaultLength": {
+            "type": "number"
+          },
+          "call": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "description": "Where it meets. A place's `location` shows; a call link's address reaches only the invite.",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "meet",
+                  "link",
+                  "place"
+                ]
+              },
+              "location": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Page": {
+        "type": "object",
+        "required": [
+          "link",
+          "timeZone",
+          "firstDay",
+          "lastDay",
+          "days",
+          "suggested"
+        ],
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/Link"
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "The host's Home time zone, an IANA name."
+          },
+          "firstDay": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "A Day, YYYY-MM-DD, in the host's Home time zone."
+          },
+          "lastDay": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "A Day, YYYY-MM-DD, in the host's Home time zone."
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "day",
+                "open"
+              ],
+              "properties": {
+                "day": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "A Day, YYYY-MM-DD, in the host's Home time zone."
+                },
+                "open": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "number",
+                        "description": "Milliseconds since epoch."
+                      },
+                      "end": {
+                        "type": "number",
+                        "description": "Milliseconds since epoch."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "suggested": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "description": "Milliseconds since epoch."
+            },
+            "description": "Up to 3 starts a week best for the host, at the default length."
+          }
+        }
+      },
+      "BookingRequest": {
+        "type": "object",
+        "required": [
+          "start",
+          "length",
+          "name",
+          "email"
+        ],
+        "properties": {
+          "start": {
+            "type": "number",
+            "description": "Milliseconds since epoch, on the quarter hour, inside one open stretch."
+          },
+          "length": {
+            "type": "number",
+            "description": "Minutes, one of the link's lengths."
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "about": {
+            "type": "string",
+            "description": "What it's about, one line of up to 200 characters, never a web address."
+          },
+          "linkedin": {
+            "type": "string",
+            "description": "A linkedin.com address."
+          },
+          "phone": {
+            "type": "string",
+            "description": "With + and the country code outside the US."
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "email"
+              ],
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Up to 5, each invited too."
+          },
+          "meetingName": {
+            "type": "string",
+            "description": "Up to 40 characters, which the event's title leads with."
+          },
+          "requestId": {
+            "type": "string",
+            "pattern": "^[a-v0-9]{20,64}$",
+            "description": "The booker's own ID for this booking, the same on a retry, which then answers the first booking."
+          }
+        }
+      },
+      "Booked": {
+        "type": "object",
+        "required": [
+          "booked"
+        ],
+        "properties": {
+          "booked": {
+            "type": "object",
+            "required": [
+              "start",
+              "end",
+              "title"
+            ],
+            "properties": {
+              "start": {
+                "type": "number",
+                "description": "Milliseconds since epoch."
+              },
+              "end": {
+                "type": "number",
+                "description": "Milliseconds since epoch."
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
