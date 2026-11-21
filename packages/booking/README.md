@@ -124,7 +124,7 @@ export default function Book() {
 React is bundled inside, so it works on any page. The bundle is about 85 KB gzipped, nearly all of it React and React DOM; on a React site, use `@coordination/booking/react` instead.
 
 ```html
-<script type="module" src="https://unpkg.com/@coordination/booking@0.1.0/dist/element.js"></script>
+<script type="module" src="https://unpkg.com/@coordination/booking@0.2.0/dist/element.js"></script>
 <daybreak-booking api="/api/booking" slug="meet"></daybreak-booking>
 ```
 
