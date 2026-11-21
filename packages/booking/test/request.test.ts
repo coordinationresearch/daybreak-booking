@@ -138,3 +138,13 @@ describe("page helpers", () => {
     expect(weekStart("2026-11-10", "2026-11-30", -1)).toBeNull();
   });
 });
+
+describe("a changed page", () => {
+  it("reads the site's 409 `changed` in its words, and reloads, apart from a taken time", () => {
+    const message = "This booking page changed. Reload it to see current times.";
+    expect(readBookingAnswer(409, { error: { code: "changed", message } })).toEqual({ ok: false, code: "changed", message });
+    expect(readBookingAnswer(409, { error: { code: "changed" } })).toMatchObject({ code: "changed", message: MESSAGES.changed });
+    expect(readBookingAnswer(409, { error: { code: "taken", message: "x" } })).toMatchObject({ code: "taken" });
+    expect(recoveryFor("changed")).toBe("reload");
+  });
+});

@@ -66,8 +66,8 @@ export const TurnstileHostContext = createContext<HTMLElement | null>(null);
  */
 export const Turnstile = forwardRef<
   TurnstileHandle,
-  { siteKey: string; onToken: (token: string | null) => void }
->(function Turnstile({ siteKey, onToken }, ref) {
+  { siteKey: string; onToken: (token: string | null) => void; theme?: "auto" | "light" | "dark" }
+>(function Turnstile({ siteKey, onToken, theme = "auto" }, ref) {
   const own = useRef<HTMLDivElement>(null);
   const host = useContext(TurnstileHostContext);
   const container = { get current() { return host ?? own.current; } };
@@ -96,7 +96,7 @@ export const Turnstile = forwardRef<
           action: "booking",
           appearance: "interaction-only",
           size: "flexible",
-          theme: "auto",
+          theme,
           callback: (token) => tokenHandler.current(token),
           "expired-callback": () => tokenHandler.current(null),
           "error-callback": () => tokenHandler.current(null),
@@ -112,7 +112,7 @@ export const Turnstile = forwardRef<
     };
     // `container` reads `host` or the div; `host` is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey, host]);
+  }, [siteKey, host, theme]);
 
   return host ? <slot name="turnstile" /> : <div ref={own} className="dbk-turnstile" />;
 });

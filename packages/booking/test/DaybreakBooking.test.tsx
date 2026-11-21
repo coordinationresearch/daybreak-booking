@@ -52,7 +52,7 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 /** The proxy: GETs answer the page, POSTs answer what each test queues. */
-function fakeProxy() {
+function fakeProxy(pageBody: () => unknown = () => PAGE) {
   const posts: { url: string; body: Record<string, unknown> }[] = [];
   const gets: string[] = [];
   const answers: (Response | Error)[] = [];
@@ -66,7 +66,7 @@ function fakeProxy() {
       return next;
     }
     gets.push(url);
-    return json(200, PAGE);
+    return json(200, pageBody());
   });
   return { fetch: fetch as unknown as typeof globalThis.fetch, posts, gets, answers };
 }
@@ -124,7 +124,8 @@ describe("booking a link", () => {
     expect(screen.getByRole("button", { name: "Pick a time first" })).toBeTruthy();
     // The week is read again, since its open time changed.
     await waitFor(() => expect(proxy.gets.length).toBeGreaterThan(0));
-    expect(proxy.gets[0]).toBe("/api/booking/meet?days=7&from=2026-11-10");
+    // `days=07` is an address a CDN hasn't kept, so the read is the week as it is now.
+    expect(proxy.gets[0]).toBe("/api/booking/meet?from=2026-11-10&days=07");
   });
 
   it("says when the person check failed", async () => {
@@ -165,6 +166,64 @@ describe("booking a link", () => {
     expect(screen.getByText("11:00 AM - 11:30 AM PT for Sam")).toBeTruthy();
     expect(screen.getByText("ana@example.com")).toBeTruthy();
     expect(document.body.textContent).toContain("with the Google Meet link");
+  });
+
+  it("reads the week again past the CDN's copy after a booking", async () => {
+    proxy.answers.push(json(200, { booked: { start: at(11), end: at(11, 30), title: "Ana 🤝 Sam" } }));
+    page();
+    fireEvent.click(screen.getByRole("button", { name: /^2:00 PM your time/ }));
+    const user = await fillForm();
+    await user.click(screen.getByRole("button", { name: "Book 30 min" }));
+    await screen.findByRole("heading", { name: "You're meeting Sam" });
+    await user.click(screen.getByRole("button", { name: "Book another time" }));
+    await waitFor(() => expect(proxy.gets).toContain("/api/booking/meet?from=2026-11-10&days=07"));
+  });
+
+  it("sends back the `registration` the site's proxy put on the page", async () => {
+    proxy = fakeProxy(() => ({ ...PAGE, registration: "reg-from-the-site" }));
+    proxy.answers.push(json(200, { booked: { start: at(11), end: at(11, 30), title: "Ana 🤝 Sam" } }));
+    render(<DaybreakBooking api="/api/u/sam" slug="meet" fetch={proxy.fetch} />);
+    fireEvent.click(await screen.findByRole("button", { name: /^2:00 PM your time/ }));
+    const user = await fillForm();
+    await user.click(screen.getByRole("button", { name: "Book 30 min" }));
+    await waitFor(() => expect(proxy.posts).toHaveLength(1));
+    expect(proxy.posts[0]!.body.registration).toBe("reg-from-the-site");
+  });
+
+  it("sends no `registration` when the page has none, as bookingHandler's pages don't", async () => {
+    proxy.answers.push(json(200, { booked: { start: at(11), end: at(11, 30), title: "Ana 🤝 Sam" } }));
+    page();
+    fireEvent.click(screen.getByRole("button", { name: /^2:00 PM your time/ }));
+    const user = await fillForm();
+    await user.click(screen.getByRole("button", { name: "Book 30 min" }));
+    await waitFor(() => expect(proxy.posts).toHaveLength(1));
+    expect("registration" in proxy.posts[0]!.body).toBe(false);
+  });
+
+  it("says a changed page changed, in the site's words, and reloads it past the CDN's copy", async () => {
+    let registration = "old-registration";
+    proxy = fakeProxy(() => ({ ...PAGE, registration }));
+    const message = "This booking page changed. Reload it to see current times.";
+    proxy.answers.push(json(409, { error: { code: "changed", message } }));
+    render(<DaybreakBooking api="/api/u/sam" slug="meet" fetch={proxy.fetch} />);
+    fireEvent.click(await screen.findByRole("button", { name: /^2:00 PM your time/ }));
+    const user = await fillForm();
+    await user.click(screen.getByRole("button", { name: "Book 30 min" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(message);
+    expect(screen.getByRole("button", { name: "Book 30 min" }).hasAttribute("disabled")).toBe(true);
+    registration = "new-registration";
+    await user.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(proxy.gets.at(-1)).toBe("/api/u/sam/meet?days=07"));
+    expect(await screen.findByRole("button", { name: /^2:00 PM your time/ })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    proxy.answers.push(json(200, { booked: { start: at(11), end: at(11, 30), title: "Ana 🤝 Sam" } }));
+    fireEvent.click(screen.getByRole("button", { name: /^2:00 PM your time/ }));
+    const again = await fillForm();
+    await again.click(screen.getByRole("button", { name: "Book 30 min" }));
+    await waitFor(() => expect(proxy.posts).toHaveLength(2));
+    expect(proxy.posts[1]!.body.registration).toBe("new-registration");
   });
 
   it("reads the first week itself without one", async () => {
@@ -274,5 +333,22 @@ describe("the week strip from the keyboard", () => {
     );
     expect(screen.getByText("2:00-3:00 PM")).toBeTruthy();
     expect(screen.getByText("11:00 AM PT")).toBeTruthy();
+  });
+});
+
+describe("the person check", () => {
+  afterEach(() => {
+    cleanup();
+    delete window.turnstile;
+  });
+
+  it("draws Cloudflare's widget in the page's theme", async () => {
+    const renderWidget = vi.fn(() => "widget-1");
+    window.turnstile = { render: renderWidget, reset: vi.fn(), remove: vi.fn() };
+    render(
+      <DaybreakBooking api="/api/booking" slug="meet" initial={PAGE} theme="dark" turnstileSiteKey="example-site-key" fetch={fakeProxy().fetch} />,
+    );
+    await waitFor(() => expect(renderWidget).toHaveBeenCalled());
+    expect(renderWidget.mock.calls[0]!.at(1)).toMatchObject({ theme: "dark", sitekey: "example-site-key" });
   });
 });

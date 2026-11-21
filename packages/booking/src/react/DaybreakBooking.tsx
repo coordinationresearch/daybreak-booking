@@ -59,6 +59,7 @@ export function DaybreakBooking(props: DaybreakBookingProps) {
           initial={props.slug === slug ? props.initial : undefined}
           turnstileSiteKey={props.turnstileSiteKey}
           heading={props.heading ?? true}
+          theme={theme}
           onBack={props.slug ? undefined : () => setPicked(undefined)}
         />
       ) : (
@@ -103,6 +104,7 @@ function LinkPage({
   initial,
   turnstileSiteKey,
   heading,
+  theme,
   onBack,
 }: {
   slug: string;
@@ -110,6 +112,7 @@ function LinkPage({
   initial: BookingPage | undefined;
   turnstileSiteKey: string | undefined;
   heading: boolean;
+  theme: "auto" | "light" | "dark";
   onBack: (() => void) | undefined;
 }) {
   const idPrefix = `dbk${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -120,7 +123,8 @@ function LinkPage({
     if (initial && attempt === 0) return;
     let cancelled = false;
     setRead(null);
-    void transport.page(slug, undefined).then((answer) => {
+    // A second read follows a failure or a changed page, so it skips the CDN's copy.
+    void transport.page(slug, undefined, { fresh: attempt > 0 }).then((answer) => {
       if (!cancelled) setRead(answer);
     });
     return () => {
@@ -162,7 +166,10 @@ function LinkPage({
         </div>
       ) : (
         <BookingPicker
+          key={attempt}
           slug={slug}
+          theme={theme}
+          onReload={() => setAttempt((n) => n + 1)}
           initial={read.page}
           transport={transport}
           idPrefix={idPrefix}

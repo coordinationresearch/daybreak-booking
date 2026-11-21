@@ -77,6 +77,8 @@ export type BookingErrorCode =
   | "not_found"
   /** The person check failed or expired: a proxy's 403 `forbidden`. */
   | "challenge"
+  /** The Daybreak site's proxy: the page was loaded for another deployment than the name answers with now (409 `changed`). */
+  | "changed"
   /** Daybreak couldn't be reached or answered something unexpected. */
   | "unavailable";
 
@@ -92,6 +94,8 @@ export type Recovery =
   | "fix"
   /** Send the same attempt again, with the same request ID. */
   | "retry"
+  /** Read the page again, as it is now, before booking. */
+  | "reload"
   /** Nothing to do from here. */
   | "stop";
 
@@ -104,6 +108,8 @@ export function recoveryFor(code: BookingErrorCode): Recovery {
       return "fix";
     case "unavailable":
       return "retry";
+    case "changed":
+      return "reload";
     case "too_many":
     case "closed":
     case "not_found":
@@ -118,12 +124,13 @@ export const MESSAGES = {
   notFound: "This booking link isn't open.",
   challenge: "The check that you're a person didn't go through. Try it again.",
   unavailable: "Couldn't reach the calendar. Try again.",
+  changed: "This booking page changed. Reload it to see current times.",
 } as const;
 
 /**
- * A proxy's answer to `POST <api>/<slug>`, read into a BookResult. Only a
- * 400's message reaches the booker word for word; every other refusal gets
- * this page's own words.
+ * A proxy's answer to `POST <api>/<slug>`, read into a BookResult. Only the
+ * messages of a 400 and of a 409 `changed` reach the booker word for word;
+ * every other refusal gets this page's own words.
  */
 export function readBookingAnswer(status: number, body: unknown): BookResult {
   const object = typeof body === "object" && body !== null ? body : {};
@@ -159,6 +166,13 @@ export function readBookingAnswer(status: number, body: unknown): BookResult {
     case 404:
       return { ok: false, code: "not_found", message: MESSAGES.notFound };
     case 409:
+      if (error.code === "changed") {
+        return {
+          ok: false,
+          code: "changed",
+          message: typeof error.message === "string" && error.message.trim() !== "" ? error.message : MESSAGES.changed,
+        };
+      }
       return { ok: false, code: "taken", message: MESSAGES.taken };
     case 429:
       return { ok: false, code: "too_many", message: MESSAGES.tooMany };

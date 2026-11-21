@@ -22,7 +22,12 @@ import { TurnstileHostContext } from "../react/Turnstile.js";
  * the `--fl-*` and `--dbk-*` custom properties do. Cloudflare's widget draws
  * in the light DOM and is slotted in.
  */
-export class DaybreakBookingElement extends HTMLElement {
+// Server rendering imports this module where HTMLElement doesn't exist, so
+// the class extends a stand-in there and nothing is registered.
+const ElementBase: typeof HTMLElement =
+  typeof HTMLElement !== "undefined" ? HTMLElement : (class {} as unknown as typeof HTMLElement);
+
+export class DaybreakBookingElement extends ElementBase {
   static observedAttributes = ["api", "slug", "turnstile-site-key", "theme", "heading", "link-href"];
 
   #root: Root | null = null;
@@ -99,7 +104,7 @@ function adoptStyles(shadow: ShadowRoot) {
 
 /** Registers the element under `tag`, `daybreak-booking` unless given. Importing this module already registers the default. */
 export function defineDaybreakBooking(tag = "daybreak-booking") {
-  if (typeof customElements !== "undefined" && !customElements.get(tag)) {
+  if (typeof HTMLElement !== "undefined" && typeof customElements !== "undefined" && !customElements.get(tag)) {
     customElements.define(tag, class extends DaybreakBookingElement {});
   }
 }

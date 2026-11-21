@@ -20,11 +20,34 @@ export type PageRead =
 
 export type LinksRead = { status: "open"; links: ListedLink[] } | { status: "closed"; message: string } | { status: "unavailable" };
 
+/** What a POST carries beside the booking: the person check's token, and the page's `registration` sent back. */
+export type ProxyFields = { turnstileToken?: string; registration?: string };
+
 export type Transport = {
-  page(slug: string, from: string | undefined): Promise<PageRead>;
+  /** `fresh` skips a shared cache's copy, after a booking changed the open time. */
+  page(slug: string, from: string | undefined, options?: { fresh?: boolean }): Promise<PageRead>;
   links(): Promise<LinksRead>;
-  book(slug: string, request: BookingRequest & { turnstileToken?: string }): Promise<BookResult>;
+  book(slug: string, request: BookingRequest & ProxyFields): Promise<BookResult>;
 };
+
+/**
+ * `days` as a fresh read asks for it. A CDN keeps each read for a minute by
+ * its address, so a read just after a booking asks for the same week as
+ * `days=07`: an address the cache hasn't seen, which both `bookingHandler`
+ * and the Daybreak site's proxy take (the site's refuses any parameter but
+ * `from` and `days`, so a cache-busting parameter of its own isn't an option).
+ */
+export const FRESH_DAYS = `0${WEEK}`;
+
+/**
+ * The `registration` a page's body carries when the Daybreak site's proxy
+ * answered it: an opaque value a booking sends back, so a page loaded for
+ * one host never books with another. `bookingHandler` sends none.
+ */
+export function registrationOf(page: BookingPage | null | undefined): string | undefined {
+  const value = (page as { registration?: unknown } | null | undefined)?.registration;
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
 
 const base = (api: string) => api.replace(/\/+$/, "");
 
@@ -46,9 +69,11 @@ export function createTransport(api: string, send: typeof fetch = (...args) => f
     }
   };
   return {
-    async page(slug, from) {
-      const query = new URLSearchParams({ days: String(WEEK) });
+    async page(slug, from, options = {}) {
+      // `from` first, then `days`: the one order the Daybreak site's proxy answers without a redirect.
+      const query = new URLSearchParams();
       if (from) query.set("from", from);
+      query.set("days", options.fresh ? FRESH_DAYS : String(WEEK));
       const { status, body } = await read(`${base(api)}/${encodeURIComponent(slug)}?${query}`);
       if (status === 200 && typeof body === "object" && body !== null && "days" in body) {
         return { status: "open", page: body as BookingPage };
@@ -84,6 +109,9 @@ export function createTransport(api: string, send: typeof fetch = (...args) => f
 /** How long a week's open time is shown without asking again. */
 const FRESH_MS = 30_000;
 
+/** How long a shared cache may keep a read: `bookingHandler`'s default and the site's. */
+const CDN_MS = 60_000;
+
 /**
  * One week of open time at a time, keeping the last week on screen while the
  * next loads, as react-query's `keepPreviousData` did on /meet. `invalidate`
@@ -97,6 +125,8 @@ export function useWeek(transport: Transport, slug: string, from: string, initia
   });
   const [version, setVersion] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Until then, every read skips the CDN's copy, which may predate the booking.
+  const freshUntil = useRef(0);
 
   useEffect(() => {
     const hit = cache.current.get(from);
@@ -107,7 +137,7 @@ export function useWeek(transport: Transport, slug: string, from: string, initia
     }
     let cancelled = false;
     setLoading(true);
-    void transport.page(slug, from).then((read) => {
+    void transport.page(slug, from, { fresh: Date.now() < freshUntil.current }).then((read) => {
       if (read.status === "open") cache.current.set(from, { at: Date.now(), read });
       if (cancelled) return;
       setShown({ from, read });
@@ -121,6 +151,7 @@ export function useWeek(transport: Transport, slug: string, from: string, initia
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
   const invalidate = useCallback(() => {
     cache.current.clear();
+    freshUntil.current = Date.now() + CDN_MS;
     setVersion((v) => v + 1);
   }, []);
 

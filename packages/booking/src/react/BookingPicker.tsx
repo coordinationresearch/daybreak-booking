@@ -7,7 +7,7 @@ import { type Attempt, type BookResult, attemptFor, attemptKey, recoveryFor } fr
 import { MINUTE, dayHolding, resize, suggestedFor } from "../page/slots.js";
 import { browserTimeZone, rangeLabel, slotSentence, slotText, zonedParts } from "../page/zones.js";
 import type { Booked, BookingDay, BookingLink, BookingPage } from "../types.js";
-import { type Transport, useWeek } from "./data.js";
+import { type Transport, registrationOf, useWeek } from "./data.js";
 import {
   ArrowClockwiseIcon,
   CaretLeftIcon,
@@ -54,12 +54,17 @@ export function BookingPicker({
   transport,
   turnstileSiteKey,
   idPrefix,
+  theme = "auto",
+  onReload,
 }: {
   slug: string;
   initial: BookingPage;
   transport: Transport;
   turnstileSiteKey?: string;
   idPrefix: string;
+  theme?: "auto" | "light" | "dark";
+  /** Reads the link's page again from the start, after the proxy said it changed. */
+  onReload: () => void;
 }) {
   const hostZone = initial.timeZone;
   const bookerZone = useBookerZone() ?? hostZone;
@@ -127,10 +132,12 @@ export function BookingPicker({
     };
     attempt.current = attemptFor(attempt.current, attemptKey(request));
     setPending(true);
+    const registration = registrationOf(page) ?? registrationOf(initial);
     const answer = await transport.book(slug, {
       ...request,
       requestId: attempt.current.requestId,
       ...(token ? { turnstileToken: token } : {}),
+      ...(registration ? { registration } : {}),
     });
     setPending(false);
     turnstile.current?.reset();
@@ -173,7 +180,8 @@ export function BookingPicker({
   const previous = weekStart(initial.firstDay, initial.lastDay, week - 1);
   const next = weekStart(initial.firstDay, initial.lastDay, week + 1);
   const needsToken = Boolean(turnstileSiteKey);
-  const canBook = selection !== null && !pending && (!needsToken || token !== null);
+  const mustReload = failure !== null && recoveryFor(failure.code) === "reload";
+  const canBook = selection !== null && !pending && !mustReload && (!needsToken || token !== null);
   const CallIcon = link.call.kind === "place" ? MapPinIcon : VideoCameraIcon;
   const id = (name: string) => `${idPrefix}-${name}`;
 
@@ -385,12 +393,23 @@ export function BookingPicker({
             </Field>
           </fieldset>
 
-          {turnstileSiteKey && <Turnstile ref={turnstile} siteKey={turnstileSiteKey} onToken={setToken} />}
+          {turnstileSiteKey && <Turnstile ref={turnstile} siteKey={turnstileSiteKey} onToken={setToken} theme={theme} />}
 
-          {failure && recoveryFor(failure.code) !== "repick" && (
-            <p role="alert" className="dbk-alert">
+          {failure && mustReload ? (
+            <div role="alert" className="dbk-alert dbk-row">
               {failure.message}
-            </p>
+              <button type="button" className="dbk-btn dbk-btn-sm dbk-btn-outline" onClick={onReload}>
+                <ArrowClockwiseIcon />
+                Reload
+              </button>
+            </div>
+          ) : (
+            failure &&
+            recoveryFor(failure.code) !== "repick" && (
+              <p role="alert" className="dbk-alert">
+                {failure.message}
+              </p>
+            )
           )}
 
           <button type="submit" className="dbk-btn dbk-btn-solid dbk-btn-block" disabled={!canBook}>
