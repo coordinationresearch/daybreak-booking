@@ -61,7 +61,7 @@ export function assertServer(what: string): void {
   const inWorker = typeof (globalThis as { importScripts?: unknown }).importScripts === "function";
   if (inPage || inWorker) {
     throw new Error(
-      `${what} holds a booking key and runs only on a server. In a browser, use @daybreak/booking/react or @daybreak/booking/element against your own proxy.`,
+      `${what} holds a booking key and runs only on a server. In a browser, use @coordination/booking/react or @coordination/booking/element against your own proxy.`,
     );
   }
 }

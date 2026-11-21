@@ -36,7 +36,7 @@ await build({ ...shared, format: "iife", outfile: at("dist/element.global.js") }
 
 const { BOOKING_CSS } = await import(at("dist/react/styles.js"));
 await mkdir(at("dist"), { recursive: true });
-await writeFile(at("dist/styles.css"), `/* @daybreak/booking's stylesheet, the same one the components add themselves. */\n${BOOKING_CSS.trimStart()}`);
+await writeFile(at("dist/styles.css"), `/* @coordination/booking's stylesheet, the same one the components add themselves. */\n${BOOKING_CSS.trimStart()}`);
 
 const element = await readFile(at("dist/element.js"));
 console.log(`Built dist/. element.js: ${(element.length / 1024).toFixed(0)} KB, ${(gzipSync(element).length / 1024).toFixed(0)} KB gzipped.`);

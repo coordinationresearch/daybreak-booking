@@ -5,15 +5,15 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "predev": "npm run build -w @daybreak/booking --prefix ../..",
+    "predev": "npm run build -w @coordination/booking --prefix ../..",
     "dev": "next dev",
-    "prebuild": "npm run build -w @daybreak/booking --prefix ../..",
+    "prebuild": "npm run build -w @coordination/booking --prefix ../..",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@daybreak/booking": "0.1.0",
+    "@coordination/booking": "0.1.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

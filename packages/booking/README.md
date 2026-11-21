@@ -1,4 +1,4 @@
-# @daybreak/booking
+# @coordination/booking
 
 Booking pages for [Daybreak](https://daybreak.coordination.sh) users: a server client for a deployment's Booking API, a proxy handler for your own site, and the booking page as a React component and a custom element.
 
@@ -12,10 +12,10 @@ browser  ──>  your proxy (bookingHandler)  ──>  https://your-deployment.
 ## Install
 
 ```sh
-npm install @daybreak/booking
+npm install @coordination/booking
 ```
 
-Node 20.19 or later, Vercel, Cloudflare Workers, Deno 2 or later, or Bun. No runtime dependencies; React 18 or 19 is a peer for `@daybreak/booking/react` only.
+Node 20.19 or later, Vercel, Cloudflare Workers, Deno 2 or later, or Bun. No runtime dependencies; React 18 or 19 is a peer for `@coordination/booking/react` only.
 
 The package is ESM only. Node 20.19 and later can also `require()` it from CommonJS.
 
@@ -43,7 +43,7 @@ Refusals answer `{ error: { code, message } }`: the deployment's own (`invalid` 
 Next.js, `app/api/booking/[[...path]]/route.ts`:
 
 ```ts
-import { bookingHandler } from "@daybreak/booking";
+import { bookingHandler } from "@coordination/booking";
 
 const handler = bookingHandler({
   url: process.env.DAYBREAK_URL!,
@@ -60,7 +60,7 @@ On Vercel the handler reads the visitor's address from `x-real-ip`, which Vercel
 Cloudflare Workers:
 
 ```ts
-import { bookingHandler } from "@daybreak/booking";
+import { bookingHandler } from "@coordination/booking";
 
 export default {
   fetch(request: Request, env: Env) {
@@ -98,10 +98,10 @@ A CDN keeps each read for `cacheSeconds` (60) by its address. Right after a book
 
 ## The page
 
-### React: `@daybreak/booking/react`
+### React: `@coordination/booking/react`
 
 ```tsx
-import { DaybreakBooking } from "@daybreak/booking/react";
+import { DaybreakBooking } from "@coordination/booking/react";
 
 export default function Book() {
   return <DaybreakBooking api="/api/booking" slug="meet" turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY} />;
@@ -117,18 +117,18 @@ export default function Book() {
 | `heading` | The link's title and a line on how to book. On unless `false`. |
 | `theme` | `"auto"` (the default), `"light"`, or `"dark"`. |
 | `linkHref` | `(slug) => href` for the list of links. Without it, a link opens in place. |
-| `injectStyles` | The component adds its stylesheet to the document. Pass `false` and import `@daybreak/booking/styles.css` yourself to avoid a flash on server-rendered pages. |
+| `injectStyles` | The component adds its stylesheet to the document. Pass `false` and import `@coordination/booking/styles.css` yourself to avoid a flash on server-rendered pages. |
 
-### Custom element: `@daybreak/booking/element`
+### Custom element: `@coordination/booking/element`
 
-React is bundled inside, so it works on any page. The bundle is about 85 KB gzipped, nearly all of it React and React DOM; on a React site, use `@daybreak/booking/react` instead.
+React is bundled inside, so it works on any page. The bundle is about 85 KB gzipped, nearly all of it React and React DOM; on a React site, use `@coordination/booking/react` instead.
 
 ```html
-<script type="module" src="https://unpkg.com/@daybreak/booking@0.1.0/dist/element.js"></script>
+<script type="module" src="https://unpkg.com/@coordination/booking@0.1.0/dist/element.js"></script>
 <daybreak-booking api="/api/booking" slug="meet"></daybreak-booking>
 ```
 
-Or `dist/element.global.js` with a plain `<script>`, or `import "@daybreak/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, and `link-href` with `{slug}` in it, as `/book/{slug}`.
+Or `dist/element.global.js` with a plain `<script>`, or `import "@coordination/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, and `link-href` with `{slug}` in it, as `/book/{slug}`.
 
 It draws in a shadow root, so your page's styles don't reach in. Cloudflare's widget draws in the light DOM and is slotted in. Importing the module during server rendering is safe: where `HTMLElement` doesn't exist, it registers nothing.
 
@@ -156,7 +156,7 @@ The grays aren't First Light tokens: `--dbk-text`, `--dbk-muted`, `--dbk-line`, 
 For your own server code, such as rendering the first week or an agent's backend. It refuses to run in a browser page (where `window` and `document` both exist) or a web worker, so a key never ships to a browser. It needs a key.
 
 ```ts
-import { BookingError, createClient } from "@daybreak/booking";
+import { BookingError, createClient } from "@coordination/booking";
 
 const daybreak = createClient({ url: process.env.DAYBREAK_URL!, key: process.env.DAYBREAK_BOOKING_KEY! });
 
@@ -176,7 +176,7 @@ try {
 const live = await daybreak.checkKey(); // false once the key is revoked
 ```
 
-Types (`BookingPage`, `BookingRequest`, `Booked`, and the rest) are generated from the API's OpenAPI document, which ships at `@daybreak/booking/openapi.json`. A deployment serves its own at `GET /book/v1/openapi.json`.
+Types (`BookingPage`, `BookingRequest`, `Booked`, and the rest) are generated from the API's OpenAPI document, which ships at `@coordination/booking/openapi.json`. A deployment serves its own at `GET /book/v1/openapi.json`.
 
 ## License
 

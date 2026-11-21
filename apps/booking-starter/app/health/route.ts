@@ -1,7 +1,7 @@
 // GET /health: whether the booking key works, for an uptime check or a look after deploying.
 // 200 when the deployment takes the key, 503 otherwise, with a reason. It never shows the key or
 // the deployment's address, and it doesn't book or read anyone's open time.
-import { BookingError } from "@daybreak/booking";
+import { BookingError } from "@coordination/booking";
 import { daybreak, missing, turnstile } from "../../lib/daybreak";
 
 export const dynamic = "force-dynamic";

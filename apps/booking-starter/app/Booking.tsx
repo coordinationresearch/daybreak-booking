@@ -1,9 +1,9 @@
 "use client";
 
-// The page itself, from @daybreak/booking/react. It calls only this site's proxy at /api/booking.
+// The page itself, from @coordination/booking/react. It calls only this site's proxy at /api/booking.
 // A client component, since `linkHref` is a function and can't cross from the server.
-import type { BookingPage } from "@daybreak/booking";
-import { DaybreakBooking } from "@daybreak/booking/react";
+import type { BookingPage } from "@coordination/booking";
+import { DaybreakBooking } from "@coordination/booking/react";
 
 export function Booking({ slug, initial }: { slug?: string; initial?: BookingPage }) {
   return (

@@ -28,7 +28,7 @@ export type DaybreakBookingProps = {
   theme?: "auto" | "light" | "dark";
   /** Where each listed link goes. Without it, picking a link opens it in place. */
   linkHref?: (slug: string) => string;
-  /** Adds the page's stylesheet to its document or shadow root. On unless false, for a site that loads `@daybreak/booking/styles.css` itself. */
+  /** Adds the page's stylesheet to its document or shadow root. On unless false, for a site that loads `@coordination/booking/styles.css` itself. */
   injectStyles?: boolean;
   /** For tests, or a fetch that needs wrapping. */
   fetch?: typeof fetch;

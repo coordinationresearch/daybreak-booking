@@ -1,5 +1,5 @@
 {
-  "name": "@daybreak/booking",
+  "name": "@coordination/booking",
   "version": "0.1.0",
   "description": "Booking pages for Daybreak: a server client, a proxy handler, and the booking page as a React component and a custom element.",
   "license": "MIT",

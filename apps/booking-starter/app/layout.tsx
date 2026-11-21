@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import "@daybreak/booking/styles.css";
+import "@coordination/booking/styles.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

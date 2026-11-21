@@ -3,7 +3,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { BookingError, type BookingPage } from "@daybreak/booking";
+import { BookingError, type BookingPage } from "@coordination/booking";
 import { Booking } from "../Booking";
 import { daybreak } from "../../lib/daybreak";
 

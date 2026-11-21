@@ -1,6 +1,6 @@
 // The server's side of the starter: the deployment's address and the booking key come from the
 // environment and stay here. Nothing in this file may be imported by a client component.
-import { bookingHandler, createClient, type BookingClient } from "@daybreak/booking";
+import { bookingHandler, createClient, type BookingClient } from "@coordination/booking";
 
 type Env = { url: string; key: string; turnstileSecret: string | undefined; turnstileSiteKey: string | undefined };
 

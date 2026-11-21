@@ -2,7 +2,7 @@
 
 A small Next.js site that shows your Daybreak Booking links and books them, on your own domain. Deploy it as it is, or change it: it's yours.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fchappyasel%2Fdaybreak-booking&root-directory=apps%2Fbooking-starter&project-name=booking&env=DAYBREAK_URL,DAYBREAK_BOOKING_KEY&envDescription=Your%20deployment%27s%20HTTP%20actions%20address%20and%20a%20booking%20key%20from%20Daybreak%27s%20Settings%20%E2%80%BA%20Booking%20%E2%80%BA%20Website%20keys&envLink=https%3A%2F%2Fgithub.com%2Fchappyasel%2Fdaybreak-booking%2Ftree%2Fmain%2Fapps%2Fbooking-starter%23settings)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcoordinationresearch%2Fdaybreak-booking&root-directory=apps%2Fbooking-starter&project-name=booking&env=DAYBREAK_URL,DAYBREAK_BOOKING_KEY&envDescription=Your%20deployment%27s%20HTTP%20actions%20address%20and%20a%20booking%20key%20from%20Daybreak%27s%20Settings%20%E2%80%BA%20Booking%20%E2%80%BA%20Website%20keys&envLink=https%3A%2F%2Fgithub.com%2Fcoordinationresearch%2Fdaybreak-booking%2Ftree%2Fmain%2Fapps%2Fbooking-starter%23settings)
 
 ## What it serves
 
@@ -44,11 +44,11 @@ cp apps/booking-starter/.env.example apps/booking-starter/.env.local   # then fi
 npm run dev -w booking-starter
 ```
 
-`npm run dev` and `npm run build` build `packages/booking` first, since the starter uses the copy in this repo. To use the published package instead, in a copy of `apps/booking-starter` on its own, delete the `predev` and `prebuild` scripts and the two root settings in `next.config.mjs`, and install `@daybreak/booking` from npm.
+`npm run dev` and `npm run build` build `packages/booking` first, since the starter uses the copy in this repo. To use the published package instead, in a copy of `apps/booking-starter` on its own, delete the `predev` and `prebuild` scripts and the two root settings in `next.config.mjs`, and install `@coordination/booking` from npm.
 
 ## Change it
 
-- `app/Booking.tsx` draws the page with `DaybreakBooking` from `@daybreak/booking/react`. Its props (`heading`, `theme`, `linkHref`, and the rest) are in [the package's README](../../packages/booking/README.md#react-daybreakbookingreact).
+- `app/Booking.tsx` draws the page with `DaybreakBooking` from `@coordination/booking/react`. Its props (`heading`, `theme`, `linkHref`, and the rest) are in [the package's README](../../packages/booking/README.md#react-daybreakbookingreact).
 - `app/globals.css` styles the page around it. The component's colors are CSS variables you can set: see the package README's Styling.
 - `lib/daybreak.ts` holds the server's side: the client and the proxy. Nothing there may reach the browser.
 
