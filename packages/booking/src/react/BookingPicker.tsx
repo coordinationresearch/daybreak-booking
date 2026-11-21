@@ -1,24 +1,48 @@
 "use client";
 
-import { type FormEvent, type ReactNode, type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
-import { callLabel, lengthLabel, weekStart } from "../page/days.js";
-import { type Attempt, type BookResult, attemptFor, attemptKey, recoveryFor } from "../page/request.js";
-import { MINUTE, dayHolding, resize, suggestedFor } from "../page/slots.js";
-import { browserTimeZone, rangeLabel, slotSentence, slotText, zonedParts } from "../page/zones.js";
+import { PHONE_DAYS, WEEK, callLabel, daysFitting, lengthLabel, lengthWords, stepLabel, windowStart } from "../page/days.js";
+import type { LengthChoice } from "../page/links.js";
+import {
+  type Attempt,
+  type BookResult,
+  GUESTS_MOST,
+  MEETING_NAME_LENGTH,
+  attemptFor,
+  attemptKey,
+  linkedinAddress,
+  recoveryFor,
+  titleLead,
+} from "../page/request.js";
+import { MINUTE, dayHolding, firstPick, fits, resize, suggestedFor } from "../page/slots.js";
+import { browserTimeZone, slotSentence, slotText, untilLabel, zonedParts } from "../page/zones.js";
 import type { Booked, BookingDay, BookingLink, BookingPage } from "../types.js";
 import { type Transport, registrationOf, useWeek } from "./data.js";
 import {
   ArrowClockwiseIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
+  ArrowUUpLeftIcon,
+  CaretLeftBoldIcon,
+  CaretRightBoldIcon,
   CheckCircleIcon,
   EnvelopeSimpleIcon,
-  MapPinIcon,
-  SunIcon,
-  VideoCameraIcon,
+  MapPinRegularIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  StarIcon,
+  VideoCameraRegularIcon,
+  XIcon,
 } from "./icons.js";
-import { TimeList } from "./TimeList.js";
+import { Suffixed } from "./text.js";
 import { Turnstile, type TurnstileHandle } from "./Turnstile.js";
 import { WeekStrip } from "./WeekStrip.js";
 
@@ -29,9 +53,38 @@ function useBookerZone() {
   return useSyncExternalStore(noSubscription, browserTimeZone, () => null);
 }
 
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/** The page's width at two breakpoints: whether it stacks, and how many Days fit beside the card. */
+function useLayout(root: RefObject<HTMLDivElement | null>, column: RefObject<HTMLDivElement | null>) {
+  const [layout, setLayout] = useState({ narrow: false, count: WEEK });
+  useClientLayoutEffect(() => {
+    const measure = () => {
+      const width = root.current?.getBoundingClientRect().width ?? 0;
+      const columnWidth = column.current?.getBoundingClientRect().width ?? width;
+      if (width === 0) return;
+      const narrow = width < NARROW;
+      const count = narrow ? PHONE_DAYS : daysFitting(columnWidth, false);
+      setLayout((previous) => (previous.narrow === narrow && previous.count === count ? previous : { narrow, count }));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    if (root.current) observer.observe(root.current);
+    if (column.current) observer.observe(column.current);
+    return () => observer.disconnect();
+  }, []);
+  return layout;
+}
+
+/** Under this width the card goes under the grid, as /meet's 872px. */
+const NARROW = 872;
+
 const cn = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(" ");
 
 type Selected = { start: number; day: BookingDay };
+
+type GuestRow = { key: number; name: string; email: string };
 
 type Fields = {
   name: string;
@@ -39,66 +92,120 @@ type Fields = {
   about: string;
   linkedin: string;
   phone: string;
+  meetingName: string;
 };
 
-const EMPTY: Fields = { name: "", email: "", about: "", linkedin: "", phone: "" };
+const EMPTY: Fields = { name: "", email: "", about: "", linkedin: "", phone: "", meetingName: "" };
 
 /**
- * A Booking link's picker and form: lengths, a week of open time drawn like
- * Daybreak's schedule (a list of times on a narrow screen), and the
- * booker's details. Every time shows in the booker's zone and the host's.
+ * A Booking link's page, as /meet draws it: the title and length, a length
+ * choice when there's more than one, a grid of Days to pick a time on, and a
+ * card with the time and the booker's details. Every time shows in the
+ * booker's zone, and the host's beside it when it differs.
  */
 export function BookingPicker({
   slug,
   initial,
+  choices,
   transport,
   turnstileSiteKey,
   idPrefix,
+  heading,
   theme = "auto",
   onReload,
 }: {
   slug: string;
   initial: BookingPage;
+  /** The lengths to offer and the link each books, the link's siblings' included. */
+  choices: LengthChoice[];
   transport: Transport;
   turnstileSiteKey?: string;
   idPrefix: string;
+  heading: boolean;
   theme?: "auto" | "light" | "dark";
   /** Reads the link's page again from the start, after the proxy said it changed. */
   onReload: () => void;
 }) {
+  const root = useRef<HTMLDivElement>(null);
+  const column = useRef<HTMLDivElement>(null);
+  const { narrow, count } = useLayout(root, column);
   const hostZone = initial.timeZone;
   const bookerZone = useBookerZone() ?? hostZone;
   const { host } = initial.link;
 
-  const [week, setWeek] = useState(0);
-  const from = weekStart(initial.firstDay, initial.lastDay, week) ?? initial.firstDay;
-  const query = useWeek(transport, slug, from, { from: initial.firstDay, page: initial });
+  const [length, setLength] = useState(initial.link.defaultLength);
+  const active = choices.find((choice) => choice.length === length)?.slug ?? slug;
+  const [offset, setOffset] = useState(0);
+  // Each read is a week from the window's first Day; the grid shows as many of them as fit.
+  const from = windowStart(initial.firstDay, initial.lastDay, offset) ?? initial.firstDay;
+  const query = useWeek(transport, active, from, { slug, from: initial.firstDay, page: initial });
   const read = query.read;
   const page = read.status === "open" ? read.page : null;
-  const days = page?.days ?? [];
+  const allDays = page?.days ?? [];
+  const days = allDays.slice(0, count);
   const link = page?.link ?? initial.link;
+  const lastDay = page?.lastDay ?? initial.lastDay;
 
-  const [length, setLength] = useState(initial.link.defaultLength);
   const [selected, setSelected] = useState<Selected | null>(null);
-  const [phoneDay, setPhoneDay] = useState<string | null>(null);
   const [fields, setFields] = useState<Fields>(EMPTY);
+  const [guests, setGuests] = useState<GuestRow[]>([]);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [naming, setNaming] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [failure, setFailure] = useState<Extract<BookResult, { ok: false }> | null>(null);
   const [booked, setBooked] = useState<{ booked: Booked; email: string } | null>(null);
   const [pending, setPending] = useState(false);
+  const [formInView, setFormInView] = useState(false);
   const attempt = useRef<Attempt | null>(null);
   const turnstile = useRef<TurnstileHandle>(null);
+  const form = useRef<HTMLFormElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
   const bookedHeading = useRef<HTMLHeadingElement>(null);
+  const guestKey = useRef(0);
+  const picked = useRef(false);
 
   const suggestions = page ? suggestedFor(page.days, page.suggested, page.link.defaultLength, length) : [];
   const selection = selected?.start ?? null;
+  const best = selection !== null && suggestions.includes(selection);
+
+  // The first time the page has open time, the meeting starts on the best time, as /meet's does.
+  useEffect(() => {
+    if (picked.current || !page || query.isPlaceholder) return;
+    const start = firstPick(days, suggestedFor(days, page.suggested, page.link.defaultLength, length), length);
+    if (start === null) return;
+    picked.current = true;
+    const day = dayHolding(days, start);
+    if (day) setSelected({ start, day });
+  }, [page, query.isPlaceholder, days, length]);
+
+  // A sibling link's page may not have the time picked on the last one.
+  useEffect(() => {
+    if (!selected || !page || query.isPlaceholder) return;
+    const day = dayHolding(page.days, selected.start);
+    if (!day) return;
+    if (fits(day.open, selected.start, length)) return;
+    const start = resize(day.open, selected.start, length);
+    setSelected(start === null ? null : { start, day });
+  }, [page, query.isPlaceholder, selected, length]);
+
+  // On a phone, the bar at the foot carries the time until the card is in view.
+  useEffect(() => {
+    if (!narrow || !form.current || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setFormInView(Boolean(entry?.isIntersecting)), {
+      threshold: 0.2,
+    });
+    observer.observe(form.current);
+    return () => observer.disconnect();
+  }, [narrow, booked]);
+
+  useEffect(() => {
+    if (booked) bookedHeading.current?.focus();
+  }, [booked]);
 
   const select = (start: number) => {
-    const day = dayHolding(days, start);
+    const day = dayHolding(allDays, start);
     if (!day) return;
     setSelected({ start, day });
-    setPhoneDay(day.day);
     setFailure(null);
   };
 
@@ -109,31 +216,38 @@ export function BookingPicker({
     setSelected(start === null ? null : { start, day: selected.day });
   };
 
-  useEffect(() => {
-    if (booked) bookedHeading.current?.focus();
-  }, [booked]);
+  const backToBest = () => {
+    if (selection === null || suggestions.length === 0) return;
+    const nearest = suggestions.reduce((a, b) => (Math.abs(b - selection) < Math.abs(a - selection) ? b : a));
+    select(nearest);
+  };
 
   const slot = selection === null ? null : slotText(selection, selection + length * MINUTE, hostZone, bookerZone);
-  const announcement = slot
-    ? `${slotSentence(slot, host)}${suggestions.includes(selection!) ? `, a best time for ${host}` : ""}.`
-    : "";
+  const announcement = slot ? `${slotSentence(slot, host)}${best ? `, a best time for ${host}` : ""}.` : "";
+  const guestList = guests
+    .filter((guest) => guest.email.trim() !== "")
+    .map((guest) => ({ email: guest.email.trim(), ...(guest.name.trim() ? { name: guest.name.trim() } : {}) }));
+  const lead = fields.name.trim() ? titleLead(fields.name, guestList, fields.meetingName) : null;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (selection === null || pending) return;
+    const linkedin = linkedinAddress(fields.linkedin);
     const request = {
       start: selection,
       length,
       name: fields.name.trim(),
       email: fields.email.trim(),
-      about: fields.about.trim(),
-      ...(fields.linkedin.trim() ? { linkedin: fields.linkedin.trim() } : {}),
-      ...(fields.phone.trim() ? { phone: fields.phone.trim() } : {}),
+      ...(fields.about.trim() ? { about: fields.about.trim() } : {}),
+      ...(linkedin ? { linkedin } : {}),
+      ...(phoneOpen && fields.phone.trim() ? { phone: fields.phone.trim() } : {}),
+      ...(guestList.length > 0 ? { guests: guestList } : {}),
+      ...(fields.meetingName.trim() ? { meetingName: fields.meetingName.trim() } : {}),
     };
-    attempt.current = attemptFor(attempt.current, attemptKey(request));
+    attempt.current = attemptFor(attempt.current, `${active} ${attemptKey(request)}`);
     setPending(true);
     const registration = registrationOf(page) ?? registrationOf(initial);
-    const answer = await transport.book(slug, {
+    const answer = await transport.book(active, {
       ...request,
       requestId: attempt.current.requestId,
       ...(token ? { turnstileToken: token } : {}),
@@ -158,98 +272,167 @@ export function BookingPicker({
   const reset = () => {
     setBooked(null);
     setSelected(null);
-    setFields((f) => ({ ...f, about: "" }));
+    setFields((f) => ({ ...f, about: "", meetingName: "" }));
+    setGuests([]);
     setFailure(null);
   };
 
+  const title = heading ? (
+    <header className="dbk-header">
+      <h2 className="dbk-title">{link.title}</h2>
+      <p className="dbk-facts">
+        <Suffixed text={lengthLabel(length)} /> · {callLabel(link.call)}
+      </p>
+    </header>
+  ) : null;
+
   if (booked) {
     return (
-      <Confirmation
-        booked={booked.booked}
-        email={booked.email}
-        host={host}
-        hostZone={hostZone}
-        bookerZone={bookerZone}
-        call={link.call}
-        headingRef={bookedHeading}
-        onAnother={reset}
-      />
+      <div ref={root} className="dbk-page">
+        {title}
+        <Confirmation
+          booked={booked.booked}
+          email={booked.email}
+          host={host}
+          hostZone={hostZone}
+          bookerZone={bookerZone}
+          call={link.call}
+          headingRef={bookedHeading}
+          onAnother={reset}
+        />
+      </div>
     );
   }
 
-  const previous = weekStart(initial.firstDay, initial.lastDay, week - 1);
-  const next = weekStart(initial.firstDay, initial.lastDay, week + 1);
+  const stride = narrow ? PHONE_DAYS : count;
+  const previous = offset - stride >= 0 ? offset - stride : offset > 0 ? 0 : null;
+  const nextFrom = windowStart(initial.firstDay, lastDay, offset + stride);
   const needsToken = Boolean(turnstileSiteKey);
   const mustReload = failure !== null && recoveryFor(failure.code) === "reload";
   const canBook = selection !== null && !pending && !mustReload && (!needsToken || token !== null);
-  const CallIcon = link.call.kind === "place" ? MapPinIcon : VideoCameraIcon;
+  const CallIcon = link.call.kind === "place" ? MapPinRegularIcon : VideoCameraRegularIcon;
   const id = (name: string) => `${idPrefix}-${name}`;
+  const until = slot && selection !== null ? untilLabel(selection, Date.now(), bookerZone) : null;
+  const setField = (name: keyof Fields) => (event: { target: { value: string } }) =>
+    setFields((f) => ({ ...f, [name]: event.target.value }));
+
+  const nav = (
+    <nav className="dbk-nav" aria-label="Days">
+      <button
+        type="button"
+        className="dbk-chevron"
+        aria-label="Earlier days"
+        disabled={previous === null}
+        onClick={() => previous !== null && setOffset(previous)}
+      >
+        <CaretLeftBoldIcon size={13} />
+      </button>
+      <button
+        type="button"
+        className="dbk-nav-label"
+        disabled={offset === 0}
+        aria-label={offset === 0 ? undefined : `${stepLabel(offset, stride)}, back to the first days`}
+        onClick={() => setOffset(0)}
+      >
+        {stepLabel(offset, stride)}
+        {offset > 0 && <span className="dbk-nav-dot" aria-hidden />}
+      </button>
+      <button
+        type="button"
+        className="dbk-chevron"
+        aria-label="Later days"
+        disabled={nextFrom === null}
+        onClick={() => nextFrom !== null && setOffset(offset + stride)}
+      >
+        <CaretRightBoldIcon size={13} />
+      </button>
+    </nav>
+  );
+
+  const when = slot ? (
+    <div className="dbk-when">
+      <div className="dbk-when-text">
+        <p className="dbk-when-day">
+          <Suffixed text={slot.booker.day} />
+          {until?.day && <span className="dbk-aside"> · {until.time ?? until.day}</span>}
+        </p>
+        <p className="dbk-when-time">
+          <Suffixed text={slot.booker.short.start} />
+          <span className="dbk-dash">-</span>
+          <Suffixed text={slot.booker.short.end} /> <span className="dbk-zone">{slot.booker.zone}</span>
+        </p>
+        {!slot.sameClock && (
+          <p className="dbk-when-host">
+            <Suffixed text={`${slot.host.short.start}-${slot.host.short.end}`} /> {slot.host.zone} for {host}
+            {slot.dateDiffers && `, ${slot.host.day}`}
+          </p>
+        )}
+      </div>
+      {best ? (
+        <span className="dbk-capsule">
+          <StarIcon size={11} />
+          Best
+        </span>
+      ) : suggestions.length > 0 ? (
+        <button type="button" className="dbk-capsule-back" onClick={backToBest} aria-label={`Back to a best time for ${host}`}>
+          <ArrowUUpLeftIcon size={11} />
+          Best
+        </button>
+      ) : null}
+    </div>
+  ) : (
+    <p className="dbk-muted dbk-small">Pick a time on the left. Every time shows in your zone.</p>
+  );
 
   return (
-    <div className="dbk-layout">
+    <div ref={root} className={cn("dbk-page", narrow && "dbk-narrow")}>
       <p aria-live="polite" className="dbk-sr-only">
         {announcement}
       </p>
+      {title}
+      <div className="dbk-layout">
+        <div ref={column} className="dbk-main">
+          <div className="dbk-toolbar">
+            <div>
+              {choices.length > 1 && (
+                <div role="group" aria-label="Length" className="dbk-segmented">
+                  {choices.map((choice) => (
+                    <button
+                      key={choice.length}
+                      type="button"
+                      className="dbk-segment"
+                      aria-pressed={choice.length === length}
+                      aria-label={lengthWords(choice.length)}
+                      onClick={() => pickLength(choice.length)}
+                    >
+                      <Suffixed text={lengthLabel(choice.length)} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {nav}
+            <div />
+          </div>
 
-      <div className="dbk-main">
-        <div className="dbk-toolbar">
-          <div role="group" aria-label="Length" className="dbk-lengths">
-            {link.lengths.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={cn("dbk-btn dbk-btn-sm dbk-tabular", option === length ? "dbk-btn-solid" : "dbk-btn-outline")}
-                aria-pressed={option === length}
-                onClick={() => pickLength(option)}
-              >
-                {lengthLabel(option)}
+          {failure && recoveryFor(failure.code) === "repick" && (
+            <p role="alert" className="dbk-alert">
+              {failure.message}
+            </p>
+          )}
+
+          {read.status === "unavailable" ? (
+            <div className="dbk-empty">
+              Couldn&apos;t load these days.
+              <button type="button" className="dbk-quiet dbk-quiet-sm" onClick={query.refetch}>
+                <ArrowClockwiseIcon />
+                Try again
               </button>
-            ))}
-          </div>
-          <div className="dbk-weeks">
-            <button
-              type="button"
-              className="dbk-btn dbk-btn-icon dbk-btn-ghost"
-              aria-label="Earlier week"
-              disabled={previous === null}
-              onClick={() => setWeek((w) => w - 1)}
-            >
-              <CaretLeftIcon />
-            </button>
-            <span className="dbk-range dbk-tabular">
-              {days.length > 0 ? rangeLabel(days[0]!.day, days.at(-1)!.day) : ""}
-            </span>
-            <button
-              type="button"
-              className="dbk-btn dbk-btn-icon dbk-btn-ghost"
-              aria-label="Later week"
-              disabled={next === null}
-              onClick={() => setWeek((w) => w + 1)}
-            >
-              <CaretRightIcon />
-            </button>
-          </div>
-        </div>
-
-        {failure && recoveryFor(failure.code) === "repick" && (
-          <p role="alert" className="dbk-alert">
-            {failure.message}
-          </p>
-        )}
-
-        {read.status === "unavailable" ? (
-          <div className="dbk-empty dbk-row">
-            Couldn&apos;t load these days.
-            <button type="button" className="dbk-btn dbk-btn-sm dbk-btn-outline" onClick={query.refetch}>
-              <ArrowClockwiseIcon />
-              Try again
-            </button>
-          </div>
-        ) : read.status === "closed" ? (
-          <p className="dbk-empty">{read.message}</p>
-        ) : (
-          <div aria-busy={query.isPlaceholder} className={cn("dbk-days", query.isPlaceholder && "dbk-faded")}>
-            <div className="dbk-wide-only">
+            </div>
+          ) : read.status === "closed" ? (
+            <p className="dbk-empty">{read.message}</p>
+          ) : (
+            <div aria-busy={query.isPlaceholder} className={cn(query.isPlaceholder && "dbk-faded")}>
               <WeekStrip
                 days={days}
                 hostZone={hostZone}
@@ -258,174 +441,249 @@ export function BookingPicker({
                 length={length}
                 selection={selection}
                 suggestions={suggestions}
+                compact={narrow}
                 onSelect={select}
                 onConfirm={() => nameField.current?.focus()}
               />
             </div>
-            <div className="dbk-narrow-only">
-              <TimeList
-                days={days}
-                activeDay={phoneDay}
-                hostZone={hostZone}
-                bookerZone={bookerZone}
-                host={host}
-                length={length}
-                selection={selection}
-                suggestions={suggestions}
-                onDay={setPhoneDay}
-                onSelect={select}
-              />
-            </div>
-            {suggestions.length > 0 && (
-              <p className="dbk-legend">
-                <SunIcon size={13} className="dbk-legend-sun" />
-                <span>
-                  A sun marks the times that suit {host} best: next to other meetings or at the edge of open time, so
-                  longer stretches stay free.
+          )}
+        </div>
+
+        <aside aria-label="Your booking" className="dbk-aside">
+          <form ref={form} onSubmit={(event) => void submit(event)} className="dbk-card">
+            {when}
+
+            <fieldset disabled={pending} className="dbk-fields">
+              <Field label="Name" id={id("name")}>
+                <input
+                  ref={nameField}
+                  id={id("name")}
+                  className="dbk-input"
+                  required
+                  maxLength={100}
+                  autoComplete="name"
+                  value={fields.name}
+                  onChange={setField("name")}
+                />
+              </Field>
+              <Field label="Email" id={id("email")}>
+                <input
+                  id={id("email")}
+                  className="dbk-input"
+                  type="email"
+                  required
+                  maxLength={254}
+                  autoComplete="email"
+                  value={fields.email}
+                  onChange={setField("email")}
+                />
+              </Field>
+
+              {guests.length > 0 && (
+                <div className="dbk-field">
+                  <span className="dbk-label">Guests</span>
+                  {guests.map((guest, index) => (
+                    <div key={guest.key} className="dbk-guest">
+                      <input
+                        className="dbk-input"
+                        aria-label={`Guest ${index + 1}'s name`}
+                        placeholder="Name"
+                        maxLength={100}
+                        value={guest.name}
+                        onChange={(e) =>
+                          setGuests((rows) => rows.map((row) => (row.key === guest.key ? { ...row, name: e.target.value } : row)))
+                        }
+                      />
+                      <input
+                        className="dbk-input"
+                        type="email"
+                        aria-label={`Guest ${index + 1}'s email`}
+                        placeholder="Email"
+                        maxLength={254}
+                        required
+                        value={guest.email}
+                        onChange={(e) =>
+                          setGuests((rows) => rows.map((row) => (row.key === guest.key ? { ...row, email: e.target.value } : row)))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="dbk-remove"
+                        aria-label={`Remove guest ${index + 1}`}
+                        onClick={() => setGuests((rows) => rows.filter((row) => row.key !== guest.key))}
+                      >
+                        <XIcon size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {phoneOpen && (
+                <Field label="Phone" id={id("phone")} hint="In case the call link fails. Outside the US, start with +.">
+                  <div className="dbk-phone">
+                    <input
+                      id={id("phone")}
+                      className="dbk-input"
+                      type="tel"
+                      inputMode="tel"
+                      maxLength={40}
+                      autoComplete="tel"
+                      value={fields.phone}
+                      onChange={setField("phone")}
+                    />
+                    <button
+                      type="button"
+                      className="dbk-remove"
+                      aria-label="Remove phone"
+                      onClick={() => {
+                        setPhoneOpen(false);
+                        setFields((f) => ({ ...f, phone: "" }));
+                      }}
+                    >
+                      <XIcon size={12} />
+                    </button>
+                  </div>
+                </Field>
+              )}
+
+              {(guests.length < GUESTS_MOST || !phoneOpen) && (
+                <div className="dbk-adds">
+                  {guests.length < GUESTS_MOST && (
+                    <button
+                      type="button"
+                      className="dbk-add"
+                      onClick={() => setGuests((rows) => [...rows, { key: ++guestKey.current, name: "", email: "" }])}
+                    >
+                      <PlusIcon size={12} />
+                      {guests.length === 0 ? "Add guests" : "Add another"}
+                    </button>
+                  )}
+                  {!phoneOpen && (
+                    <button type="button" className="dbk-add" onClick={() => setPhoneOpen(true)}>
+                      <PlusIcon size={12} />
+                      Add phone
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <Field label="LinkedIn" id={id("linkedin")} optional>
+                <input
+                  id={id("linkedin")}
+                  className="dbk-input"
+                  inputMode="url"
+                  maxLength={200}
+                  autoComplete="url"
+                  placeholder="/in/you"
+                  value={fields.linkedin}
+                  onChange={setField("linkedin")}
+                />
+              </Field>
+              <Field label="What it's about" id={id("about")} optional>
+                <textarea
+                  id={id("about")}
+                  className="dbk-input dbk-growing"
+                  rows={1}
+                  maxLength={200}
+                  value={fields.about}
+                  onChange={setField("about")}
+                />
+              </Field>
+            </fieldset>
+
+            {turnstileSiteKey && <Turnstile ref={turnstile} siteKey={turnstileSiteKey} onToken={setToken} theme={theme} />}
+
+            <p className="dbk-call">
+              <CallIcon size={17} />
+              <span>{callLabel(link.call)}</span>
+              {lead !== null && !naming && (
+                <span className="dbk-call-title">
+                  · {lead} 🤝 {host}
                 </span>
-              </p>
+              )}
+              {naming ? (
+                <span className="dbk-naming">
+                  <input
+                    className="dbk-meeting-name"
+                    aria-label="The meeting's name"
+                    maxLength={MEETING_NAME_LENGTH}
+                    placeholder={lead ?? "Name the meeting"}
+                    autoFocus
+                    value={fields.meetingName}
+                    onChange={setField("meetingName")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Escape") {
+                        e.preventDefault();
+                        if (e.key === "Escape") setFields((f) => ({ ...f, meetingName: "" }));
+                        setNaming(false);
+                      }
+                    }}
+                  />
+                  <span className="dbk-muted">🤝 {host}</span>
+                  <button type="button" className="dbk-remove" aria-label="Done naming" onClick={() => setNaming(false)}>
+                    <XIcon size={11} />
+                  </button>
+                </span>
+              ) : (
+                lead !== null && (
+                  <button type="button" className="dbk-remove" aria-label="Name the meeting" onClick={() => setNaming(true)}>
+                    <PencilSimpleIcon size={12} />
+                  </button>
+                )
+              )}
+            </p>
+
+            {failure && mustReload ? (
+              <div role="alert" className="dbk-alert">
+                {failure.message}
+                <button type="button" className="dbk-quiet dbk-quiet-sm" onClick={onReload}>
+                  <ArrowClockwiseIcon />
+                  Reload
+                </button>
+              </div>
+            ) : (
+              failure &&
+              recoveryFor(failure.code) !== "repick" && (
+                <p role="alert" className="dbk-alert">
+                  {failure.message}
+                </p>
+              )
             )}
-          </div>
-        )}
+
+            <button type="submit" className="dbk-primary" disabled={!canBook}>
+              {pending ? (
+                "Booking..."
+              ) : failure && recoveryFor(failure.code) === "retry" ? (
+                "Try again"
+              ) : selection === null ? (
+                "Pick a time first"
+              ) : (
+                <>
+                  Book <Suffixed text={lengthLabel(length)} />
+                </>
+              )}
+            </button>
+            {needsToken && token === null && selection !== null && !pending && (
+              <p className="dbk-checking">Checking you&apos;re a person...</p>
+            )}
+          </form>
+        </aside>
       </div>
 
-      <aside aria-label="Your booking" className="dbk-aside">
-        <form onSubmit={(event) => void submit(event)} className="dbk-card dbk-form">
-          <div>
-            {slot ? (
-              <>
-                <p className="dbk-eyebrow">
-                  {lengthLabel(length)}
-                  {suggestions.includes(selection!) && (
-                    <span className="dbk-best-tag">
-                      <SunIcon size={12} />
-                      Best for {host}
-                    </span>
-                  )}
-                </p>
-                <p className="dbk-slot-day">{slot.booker.day}</p>
-                <p className="dbk-slot-time dbk-tabular">
-                  {slot.booker.start} - {slot.booker.end} <span className="dbk-muted">{slot.booker.zone}</span>
-                </p>
-                {!slot.sameClock && (
-                  <p className="dbk-small dbk-muted dbk-tabular">
-                    {slot.host.start} {slot.host.zone} for {host}
-                    {slot.dateDiffers && `, ${slot.host.day}`}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="dbk-small dbk-muted">
-                Pick a length and a time. Every time shows in your zone and {host}&apos;s.
-              </p>
-            )}
-          </div>
-
-          <p className="dbk-call dbk-small dbk-muted">
-            <CallIcon size={16} />
-            {callLabel(link.call)}
-            {link.call.kind !== "place" && ". The link comes with the invite."}
-          </p>
-
-          <fieldset disabled={pending} className="dbk-fields">
-            <Field label="Name" id={id("name")}>
-              <input
-                ref={nameField}
-                id={id("name")}
-                className="dbk-input"
-                required
-                maxLength={100}
-                autoComplete="name"
-                value={fields.name}
-                onChange={(e) => setFields({ ...fields, name: e.target.value })}
-              />
-            </Field>
-            <Field label="Email" id={id("email")} hint="The invite goes here.">
-              <input
-                id={id("email")}
-                className="dbk-input"
-                type="email"
-                required
-                maxLength={254}
-                autoComplete="email"
-                value={fields.email}
-                onChange={(e) => setFields({ ...fields, email: e.target.value })}
-              />
-            </Field>
-            <Field label="What it's about" id={id("about")} hint="One line. It titles the invite.">
-              <input
-                id={id("about")}
-                className="dbk-input"
-                required
-                maxLength={200}
-                value={fields.about}
-                onChange={(e) => setFields({ ...fields, about: e.target.value })}
-              />
-            </Field>
-            <Field label="LinkedIn" id={id("linkedin")} optional>
-              <input
-                id={id("linkedin")}
-                className="dbk-input"
-                inputMode="url"
-                maxLength={200}
-                autoComplete="url"
-                placeholder="linkedin.com/in/you"
-                value={fields.linkedin}
-                onChange={(e) => setFields({ ...fields, linkedin: e.target.value })}
-              />
-            </Field>
-            <Field
-              label="Phone"
-              id={id("phone")}
-              optional
-              hint="In case the call link fails. Outside the US, start with +."
-            >
-              <input
-                id={id("phone")}
-                className="dbk-input"
-                type="tel"
-                inputMode="tel"
-                maxLength={40}
-                autoComplete="tel"
-                value={fields.phone}
-                onChange={(e) => setFields({ ...fields, phone: e.target.value })}
-              />
-            </Field>
-          </fieldset>
-
-          {turnstileSiteKey && <Turnstile ref={turnstile} siteKey={turnstileSiteKey} onToken={setToken} theme={theme} />}
-
-          {failure && mustReload ? (
-            <div role="alert" className="dbk-alert dbk-row">
-              {failure.message}
-              <button type="button" className="dbk-btn dbk-btn-sm dbk-btn-outline" onClick={onReload}>
-                <ArrowClockwiseIcon />
-                Reload
-              </button>
-            </div>
-          ) : (
-            failure &&
-            recoveryFor(failure.code) !== "repick" && (
-              <p role="alert" className="dbk-alert">
-                {failure.message}
-              </p>
-            )
-          )}
-
-          <button type="submit" className="dbk-btn dbk-btn-solid dbk-btn-block" disabled={!canBook}>
-            {pending
-              ? "Booking..."
-              : failure && recoveryFor(failure.code) === "retry"
-                ? "Try again"
-                : selection === null
-                  ? "Pick a time first"
-                  : `Book ${lengthLabel(length)}`}
-          </button>
-          {needsToken && token === null && selection !== null && !pending && (
-            <p className="dbk-hint dbk-center">Checking you&apos;re a person...</p>
-          )}
-        </form>
-      </aside>
+      {narrow && slot && !formInView && (
+        <button
+          type="button"
+          className="dbk-peek"
+          onClick={() => {
+            form.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            nameField.current?.focus({ preventScroll: true });
+          }}
+        >
+          {when}
+          <span className="dbk-peek-hint">Book this time</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -477,23 +735,27 @@ function Confirmation({
   const slot = slotText(booked.start, booked.end, hostZone, bookerZone);
   const light = zonedParts(booked.start, bookerZone).hour < 12 ? "am" : "pm";
   return (
-    <section data-light={light} className="dbk-postcard">
+    <section data-light={light} className="dbk-card dbk-done">
       <CheckCircleIcon size={32} className="dbk-done-icon" />
-      <h2 ref={headingRef} tabIndex={-1} className="dbk-postcard-title">
+      <h2 ref={headingRef} tabIndex={-1} className="dbk-done-title">
         You&apos;re meeting {host}
       </h2>
-      <p className="dbk-postcard-day">{slot.booker.day}</p>
-      <p className="dbk-postcard-time dbk-tabular">
-        {slot.booker.start} - {slot.booker.end} <span className="dbk-muted">your time, {slot.booker.zone}</span>
+      <p className="dbk-when-day">
+        <Suffixed text={slot.booker.day} />
+      </p>
+      <p className="dbk-when-time">
+        <Suffixed text={slot.booker.short.start} />
+        <span className="dbk-dash">-</span>
+        <Suffixed text={slot.booker.short.end} /> <span className="dbk-zone">{slot.booker.zone}</span>
       </p>
       {!slot.sameClock && (
-        <p className="dbk-muted dbk-tabular dbk-gap-top-xs">
-          {slot.host.start} - {slot.host.end} {slot.host.zone} for {host}
+        <p className="dbk-when-host">
+          <Suffixed text={`${slot.host.short.start}-${slot.host.short.end}`} /> {slot.host.zone} for {host}
           {slot.dateDiffers && `, ${slot.host.day}`}
         </p>
       )}
       <p className="dbk-invite">
-        <EnvelopeSimpleIcon size={18} className="dbk-invite-icon" />
+        <EnvelopeSimpleIcon size={18} />
         <span>
           The invite is in your inbox at <span className="dbk-strong">{email}</span>
           {call.kind === "meet"
@@ -503,8 +765,8 @@ function Confirmation({
               : ", with the call link."}
         </span>
       </p>
-      <p className="dbk-small dbk-muted dbk-gap-top-xs">{booked.title}</p>
-      <button type="button" className="dbk-btn dbk-btn-outline dbk-gap-top-lg" onClick={onAnother}>
+      <p className="dbk-muted dbk-small">{booked.title}</p>
+      <button type="button" className="dbk-quiet" onClick={onAnother}>
         Book another time
       </button>
     </section>

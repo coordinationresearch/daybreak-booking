@@ -42,8 +42,10 @@ describe("<daybreak-booking>", () => {
     element.setAttribute("slug", "meet");
     document.body.appendChild(element);
     await shadowText(element, "Meet with Sam");
-    expect(fetchSpy.mock.calls[0]![0]).toBe("/api/u/sam/meet?days=7");
-    expect(element.shadowRoot!.textContent).toContain("Pick a length and a time");
+    // The page, and the list beside it for the link's other lengths.
+    expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam/meet?days=7");
+    expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam");
+    expect(element.shadowRoot!.textContent).toContain("Google Meet");
     expect(element.shadowRoot!.querySelector("form")).toBeTruthy();
     // The page's own styles stay out; the element brings its own.
     const styled = element.shadowRoot!.adoptedStyleSheets?.length || element.shadowRoot!.querySelectorAll("style").length;

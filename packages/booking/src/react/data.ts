@@ -114,39 +114,51 @@ const CDN_MS = 60_000;
 
 /**
  * One week of open time at a time, keeping the last week on screen while the
- * next loads, as react-query's `keepPreviousData` did on /meet. `invalidate`
- * forgets every week after a booking changes the open time.
+ * next loads, as react-query's `keepPreviousData` did on /meet. Weeks are
+ * kept by link and first Day, so a length's sibling link reads its own.
+ * `invalidate` forgets every week after a booking changes the open time.
  */
-export function useWeek(transport: Transport, slug: string, from: string, initial: { from: string; page: BookingPage }) {
-  const cache = useRef(new Map<string, { at: number; read: PageRead }>([[initial.from, { at: Date.now(), read: { status: "open", page: initial.page } }]]));
-  const [shown, setShown] = useState<{ from: string; read: PageRead }>({
-    from: initial.from,
+export function useWeek(
+  transport: Transport,
+  slug: string,
+  from: string,
+  initial: { slug: string; from: string; page: BookingPage },
+) {
+  const key = (s: string, f: string) => `${s} ${f}`;
+  const cache = useRef(
+    new Map<string, { at: number; read: PageRead }>([
+      [key(initial.slug, initial.from), { at: Date.now(), read: { status: "open", page: initial.page } }],
+    ]),
+  );
+  const [shown, setShown] = useState<{ key: string; read: PageRead }>({
+    key: key(initial.slug, initial.from),
     read: { status: "open", page: initial.page },
   });
   const [version, setVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   // Until then, every read skips the CDN's copy, which may predate the booking.
   const freshUntil = useRef(0);
+  const wanted = key(slug, from);
 
   useEffect(() => {
-    const hit = cache.current.get(from);
+    const hit = cache.current.get(wanted);
     if (hit && Date.now() - hit.at < FRESH_MS) {
-      setShown({ from, read: hit.read });
+      setShown({ key: wanted, read: hit.read });
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
     void transport.page(slug, from, { fresh: Date.now() < freshUntil.current }).then((read) => {
-      if (read.status === "open") cache.current.set(from, { at: Date.now(), read });
+      if (read.status === "open") cache.current.set(wanted, { at: Date.now(), read });
       if (cancelled) return;
-      setShown({ from, read });
+      setShown({ key: wanted, read });
       setLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [transport, slug, from, version]);
+  }, [transport, slug, from, wanted, version]);
 
   const refetch = useCallback(() => setVersion((v) => v + 1), []);
   const invalidate = useCallback(() => {
@@ -155,5 +167,5 @@ export function useWeek(transport: Transport, slug: string, from: string, initia
     setVersion((v) => v + 1);
   }, []);
 
-  return { read: shown.read, isPlaceholder: shown.from !== from || loading, refetch, invalidate };
+  return { read: shown.read, isPlaceholder: shown.key !== wanted || loading, refetch, invalidate };
 }

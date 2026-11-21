@@ -44,10 +44,52 @@ export type BookingFields = {
   length: number;
   name: string;
   email: string;
-  about: string;
+  /** What it's about, optional: one line for the invite. */
+  about?: string;
   linkedin?: string;
   phone?: string;
+  /** Others the booker brings, up to GUESTS_MOST, each invited too. */
+  guests?: Guest[];
+  /** The booker's own name for the meeting, which the invite's title leads with. */
+  meetingName?: string;
 };
+
+export type Guest = { email: string; name?: string };
+
+/** Guests a booker may bring, besides themselves (Daybreak's GUESTS_MOST). */
+export const GUESTS_MOST = 5;
+/** A meeting name's most characters (Daybreak's MEETING_NAME_LENGTH). */
+export const MEETING_NAME_LENGTH = 40;
+
+/**
+ * The invite's title before " 🤝 <host>", as Daybreak makes it, so the form
+ * can show it as it'll read: the booker's first name; with guests, the first
+ * two people with a name and a count of the rest, "Ana & Ben", "Ana +1",
+ * "Ana, Ben +2"; or the booker's own meeting name.
+ */
+export function titleLead(name: string, guests: { name?: string }[] = [], meetingName?: string): string {
+  const named = meetingName?.replace(/\s+/g, " ").trim();
+  if (named) return named;
+  const first = (whole: string) => whole.trim().split(/\s+/)[0] ?? "";
+  const people = [first(name), ...guests.flatMap((guest) => (guest.name?.trim() ? [first(guest.name)] : []))].slice(0, 2);
+  const rest = 1 + guests.length - people.length;
+  return people.length === 2 && rest === 0 ? people.join(" & ") : `${people.join(", ")}${rest > 0 ? ` +${rest}` : ""}`;
+}
+
+/**
+ * A LinkedIn field as Daybreak takes it, a linkedin.com address. The field
+ * shows "/in/you", so "/in/ada" and "in/ada" are a profile path, and a bare
+ * handle like "ada" or "@ada" is the handle. Anything else goes as typed for
+ * Daybreak to check.
+ */
+export function linkedinAddress(typed: string): string {
+  const trimmed = typed.trim();
+  if (!trimmed) return "";
+  const path = /^\/?(in\/\S+)$/i.exec(trimmed);
+  if (path) return `linkedin.com/${path[1]}`;
+  if (!/[./\s]/.test(trimmed)) return `linkedin.com/in/${trimmed.replace(/^@/, "")}`;
+  return trimmed;
+}
 
 /** What makes two submits the same attempt: the slot and every field, trimmed. */
 export function attemptKey(fields: BookingFields): string {
@@ -56,9 +98,11 @@ export function attemptKey(fields: BookingFields): string {
     fields.length,
     fields.name.trim(),
     fields.email.trim().toLowerCase(),
-    fields.about.trim(),
+    fields.about?.trim() ?? "",
     fields.linkedin?.trim() ?? "",
     fields.phone?.trim() ?? "",
+    (fields.guests ?? []).map((guest) => [guest.email.trim().toLowerCase(), guest.name?.trim() ?? ""]),
+    fields.meetingName?.trim() ?? "",
   ]);
 }
 

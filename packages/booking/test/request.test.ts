@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { lengthLabel, weekStart } from "../src/page/days.js";
+import { daysFitting, lengthLabel, lengthWords, stepLabel, weekStart, windowStart } from "../src/page/days.js";
 import {
   MESSAGES,
   REQUEST_ID,
   attemptFor,
   attemptKey,
+  linkedinAddress,
   makeRequestId,
   readBookingAnswer,
   recoveryFor,
+  titleLead,
 } from "../src/page/request.js";
 
 describe("request IDs", () => {
@@ -125,10 +127,34 @@ describe("Daybreak's answers", () => {
 });
 
 describe("page helpers", () => {
-  it("labels lengths", () => {
-    expect(lengthLabel(15)).toBe("15 min");
-    expect(lengthLabel(60)).toBe("1 hr");
-    expect(lengthLabel(90)).toBe("1 hr 30");
+  it("labels lengths as /meet does, minutes under 100 and hours past", () => {
+    expect(lengthLabel(15)).toBe("15m");
+    expect(lengthLabel(90)).toBe("90m");
+    expect(lengthLabel(120)).toBe("2h");
+    expect(lengthLabel(150)).toBe("2h 30m");
+    expect(lengthWords(150)).toBe("2 hours 30 minutes");
+    expect(lengthWords(1)).toBe("1 minute");
+  });
+
+  it("fits three to seven Days across the grid", () => {
+    expect(daysFitting(320, true)).toBe(3);
+    expect(daysFitting(560, false)).toBe(4);
+    expect(daysFitting(900, false)).toBe(7);
+  });
+
+  it("names the Days shown by how far out they are", () => {
+    expect(stepLabel(0, 7)).toBe("This week");
+    expect(stepLabel(7, 7)).toBe("Next week");
+    expect(stepLabel(21, 7)).toBe("In 3 weeks");
+    expect(stepLabel(0, 3)).toBe("Next 3 days");
+    expect(stepLabel(3, 3)).toBe("In 3 days");
+    expect(stepLabel(15, 3)).toBe("In 2 weeks");
+  });
+
+  it("starts a window of Days only inside the bookable ones", () => {
+    expect(windowStart("2026-11-10", "2026-11-30", 3)).toBe("2026-11-13");
+    expect(windowStart("2026-11-10", "2026-11-30", 21)).toBeNull();
+    expect(windowStart("2026-11-10", "2026-11-30", -3)).toBeNull();
   });
 
   it("steps weeks inside the bookable Days", () => {
@@ -146,5 +172,32 @@ describe("a changed page", () => {
     expect(readBookingAnswer(409, { error: { code: "changed" } })).toMatchObject({ code: "changed", message: MESSAGES.changed });
     expect(readBookingAnswer(409, { error: { code: "taken", message: "x" } })).toMatchObject({ code: "taken" });
     expect(recoveryFor("changed")).toBe("reload");
+  });
+});
+
+describe("the invite's title and the LinkedIn field", () => {
+  it("leads with the booker, their guests, or the meeting's own name", () => {
+    expect(titleLead("Sam Lee")).toBe("Sam");
+    expect(titleLead("Sam Lee", [{ name: "Ana de Lima" }])).toBe("Sam & Ana");
+    expect(titleLead("Sam Lee", [{}])).toBe("Sam +1");
+    expect(titleLead("Sam Lee", [{ name: "Ana" }, { name: "Ben" }, {}])).toBe("Sam, Ana +2");
+    expect(titleLead("Sam Lee", [{ name: "Ana" }], "  Garden   plans ")).toBe("Garden plans");
+  });
+
+  it("reads a profile path or a handle as a linkedin.com address", () => {
+    expect(linkedinAddress("/in/sam-lee")).toBe("linkedin.com/in/sam-lee");
+    expect(linkedinAddress("@samlee")).toBe("linkedin.com/in/samlee");
+    expect(linkedinAddress("https://www.linkedin.com/in/sam")).toBe("https://www.linkedin.com/in/sam");
+    expect(linkedinAddress("  ")).toBe("");
+  });
+
+  it("makes guests and the meeting's name part of the attempt", () => {
+    const base = { start: 1, length: 30, name: "Sam", email: "sam@example.com" };
+    expect(attemptKey(base)).toBe(attemptKey({ ...base, about: " ", guests: [] }));
+    expect(attemptKey(base)).not.toBe(attemptKey({ ...base, guests: [{ email: "ana@example.com" }] }));
+    expect(attemptKey(base)).not.toBe(attemptKey({ ...base, meetingName: "Garden plans" }));
+    expect(attemptKey({ ...base, guests: [{ email: "Ana@Example.com" }] })).toBe(
+      attemptKey({ ...base, guests: [{ email: "ana@example.com" }] }),
+    );
   });
 });

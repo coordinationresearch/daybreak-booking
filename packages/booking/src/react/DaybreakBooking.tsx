@@ -3,10 +3,12 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { lengthLabel } from "../page/days.js";
+import { type LengthChoice, type LinkGroup, lengthChoices, linkGroups, siblingsOf } from "../page/links.js";
 import type { BookingPage, ListedLink } from "../types.js";
 import { BookingPicker } from "./BookingPicker.js";
 import { type LinksRead, type PageRead, createTransport } from "./data.js";
-import { ArrowClockwiseIcon } from "./icons.js";
+import { ArrowClockwiseIcon, CaretRightBoldIcon } from "./icons.js";
+import { Suffixed } from "./text.js";
 import { BOOKING_CSS } from "./styles.js";
 
 export type DaybreakBookingProps = {
@@ -16,13 +18,18 @@ export type DaybreakBookingProps = {
    * `GET <api>/<slug>`, and `POST <api>/<slug>`, never the deployment.
    */
   api: string;
-  /** The Booking link to show. Without it, the page lists the links. */
+  /**
+   * The Booking link to show. Without it, the page lists the links, one card
+   * per title. Links with the link's title and family (`meet` beside `15`
+   * and `60`, `coffee` beside `coffee-15`) are its lengths: the page offers
+   * each, and books the one picked with its own link.
+   */
   slug?: string;
   /** The link's first week, read on the server, so the page draws without waiting. */
   initial?: BookingPage;
   /** Cloudflare Turnstile's site key. With it, a booking carries `turnstileToken`, which the proxy checks. */
   turnstileSiteKey?: string;
-  /** The link's title and a line on how to book, above the picker. On unless false. */
+  /** The link's title and its length and call, above the picker. On unless false. */
   heading?: boolean;
   /** "auto" (the default) follows the system's light or dark. */
   theme?: "auto" | "light" | "dark";
@@ -118,6 +125,18 @@ function LinkPage({
   const idPrefix = `dbk${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [read, setRead] = useState<PageRead | null>(initial ? { status: "open", page: initial } : null);
   const [attempt, setAttempt] = useState(0);
+  const [siblings, setSiblings] = useState<ListedLink[]>([]);
+
+  // The list says which links are this one's other lengths. Without it, the page offers the link's own.
+  useEffect(() => {
+    let cancelled = false;
+    void transport.links().then((answer) => {
+      if (!cancelled && answer.status === "open") setSiblings(siblingsOf(answer.links, slug));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [transport, slug]);
 
   useEffect(() => {
     if (initial && attempt === 0) return;
@@ -134,21 +153,14 @@ function LinkPage({
 
   const page = read?.status === "open" ? read.page : null;
 
+  const choices: LengthChoice[] = page ? lengthChoices(page.link, siblings) : [];
+
   return (
-    <div className="dbk-stack-xl">
+    <div className="dbk-stack">
       {onBack && (
-        <button type="button" className="dbk-btn dbk-btn-sm dbk-btn-ghost dbk-back" onClick={onBack}>
+        <button type="button" className="dbk-back" onClick={onBack}>
           All links
         </button>
-      )}
-      {heading && page && (
-        <header className="dbk-header">
-          <h2 className="dbk-title">{page.link.title}</h2>
-          <p className="dbk-intro">
-            Pick how long, then a time. Open hours are green, and a sun marks the times that suit {page.link.host} best.
-            Book it and the invite lands in your inbox.
-          </p>
-        </header>
       )}
       {read === null ? (
         <p className="dbk-empty" aria-busy="true">
@@ -157,9 +169,9 @@ function LinkPage({
       ) : read.status === "closed" ? (
         <p className="dbk-empty">{read.message}</p>
       ) : read.status === "unavailable" ? (
-        <div className="dbk-empty dbk-row">
+        <div className="dbk-empty">
           The calendar didn&apos;t answer. Try again in a minute.
-          <button type="button" className="dbk-btn dbk-btn-sm dbk-btn-outline" onClick={() => setAttempt((n) => n + 1)}>
+          <button type="button" className="dbk-quiet dbk-quiet-sm" onClick={() => setAttempt((n) => n + 1)}>
             <ArrowClockwiseIcon />
             Try again
           </button>
@@ -169,6 +181,8 @@ function LinkPage({
           key={attempt}
           slug={slug}
           theme={theme}
+          heading={heading}
+          choices={choices}
           onReload={() => setAttempt((n) => n + 1)}
           initial={read.page}
           transport={transport}
@@ -206,7 +220,7 @@ function LinkList({
   }, [transport, attempt]);
 
   return (
-    <div className="dbk-stack-xl">
+    <div className="dbk-stack">
       {heading && (
         <header className="dbk-header">
           <h2 className="dbk-title">Book a time</h2>
@@ -219,9 +233,9 @@ function LinkList({
       ) : read.status === "closed" ? (
         <p className="dbk-empty">{read.message}</p>
       ) : read.status === "unavailable" ? (
-        <div className="dbk-empty dbk-row">
+        <div className="dbk-empty">
           The calendar didn&apos;t answer. Try again in a minute.
-          <button type="button" className="dbk-btn dbk-btn-sm dbk-btn-outline" onClick={() => setAttempt((n) => n + 1)}>
+          <button type="button" className="dbk-quiet dbk-quiet-sm" onClick={() => setAttempt((n) => n + 1)}>
             <ArrowClockwiseIcon />
             Try again
           </button>
@@ -230,9 +244,9 @@ function LinkList({
         <p className="dbk-empty">Booking isn&apos;t open right now.</p>
       ) : (
         <ul className="dbk-link-cards">
-          {read.links.map((link) => (
-            <li key={link.slug}>
-              <LinkCard link={link} href={linkHref?.(link.slug)} onPick={() => onPick(link.slug)} />
+          {linkGroups(read.links).map((group) => (
+            <li key={group.slug}>
+              <LinkCard group={group} href={linkHref?.(group.slug)} onPick={() => onPick(group.slug)} />
             </li>
           ))}
         </ul>
@@ -241,19 +255,29 @@ function LinkList({
   );
 }
 
-function LinkCard({ link, href, onPick }: { link: ListedLink; href: string | undefined; onPick: () => void }) {
+function LinkCard({ group, href, onPick }: { group: LinkGroup; href: string | undefined; onPick: () => void }) {
   const body = (
     <>
-      <span className="dbk-link-title">{link.title}</span>
-      <span className="dbk-small dbk-muted dbk-tabular">{link.lengths.map(lengthLabel).join(" · ")}</span>
+      <span className="dbk-link-text">
+        <span className="dbk-link-title">{group.title}</span>
+        <span className="dbk-link-lengths">
+          {group.lengths.map((length, index) => (
+            <span key={length}>
+              {index > 0 && " · "}
+              <Suffixed text={lengthLabel(length)} />
+            </span>
+          ))}
+        </span>
+      </span>
+      <CaretRightBoldIcon size={13} className="dbk-link-caret" />
     </>
   );
   return href ? (
-    <a className="dbk-card dbk-link-card" href={href}>
+    <a className="dbk-link-card" href={href}>
       {body}
     </a>
   ) : (
-    <button type="button" className="dbk-card dbk-link-card" onClick={onPick}>
+    <button type="button" className="dbk-link-card" onClick={onPick}>
       {body}
     </button>
   );

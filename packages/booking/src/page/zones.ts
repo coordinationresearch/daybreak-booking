@@ -184,6 +184,41 @@ export function compactRangeLabel(
     : `${from} ${fromHalf}-${to} ${toHalf}`;
 }
 
+/** "9a", "12p", or "5:30a" off the hour: the grid's hour labels. */
+export function hourLabel(ms: number, timeZone: string): string {
+  const { hour, minute } = zonedParts(ms, timeZone);
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  const half = hour < 12 ? "a" : "p";
+  return minute === 0 ? `${twelve}${half}` : `${twelve}:${String(minute).padStart(2, "0")}${half}`;
+}
+
+/** "2:30p" for 2:30 PM: the hour labels' a and p on a clock time. */
+export function shortClock(ms: number, timeZone: string): string {
+  const [clock, half] = clockLabel(ms, timeZone).split(" ");
+  return `${clock}${half === "AM" ? "a" : "p"}`;
+}
+
+/** A range's two ends, "2:00" and "2:30p", the start without its a or p when both share it. */
+export function shortRange(start: number, end: number, timeZone: string): { start: string; end: string } {
+  const from = shortClock(start, timeZone);
+  const to = shortClock(end, timeZone);
+  return { start: from.at(-1) === to.at(-1) ? from.slice(0, -1) : from, end: to };
+}
+
+/**
+ * How far off a start is, for the form's card: the date's count of calendar
+ * days on `timeZone`'s clock ("today", "tomorrow", "in 3 days"), and under a
+ * day away its hours too ("in 18h"). Nothing for a start that's passed.
+ */
+export function untilLabel(start: number, now: number, timeZone: string): { day: string | null; time: string | null } {
+  const hours = (start - now) / (60 * 60_000);
+  if (hours <= 0) return { day: null, time: null };
+  const days = Math.round((Date.parse(zonedDate(start, timeZone)) - Date.parse(zonedDate(now, timeZone))) / 86_400_000);
+  const day = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+  if (hours >= 24) return { day, time: null };
+  return { day, time: `in ${Math.max(1, Math.round(hours))}h` };
+}
+
 /** "2 PM", or "2:30 PM" off the hour, for axis labels. */
 export function shortClockLabel(ms: number, timeZone: string): string {
   const { hour, minute } = zonedParts(ms, timeZone);
@@ -237,6 +272,8 @@ export type SlotSide = {
   end: string;
   /** "PT". */
   zone: string;
+  /** "2:00" and "2:30p", or "11:30a" and "12:30p" across noon: the card's range. */
+  short: { start: string; end: string };
 };
 
 export type SlotText = {
@@ -256,6 +293,7 @@ function side(start: number, end: number, timeZone: string): SlotSide {
     start: clockLabel(start, timeZone),
     end: clockLabel(end, timeZone),
     zone: zoneLabel(start, timeZone),
+    short: shortRange(start, end, timeZone),
   };
 }
 

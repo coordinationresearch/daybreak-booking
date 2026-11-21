@@ -111,10 +111,10 @@ export default function Book() {
 | Prop | |
 | --- | --- |
 | `api` | The proxy's address. Required. |
-| `slug` | The link. Without it, the page lists the links. |
+| `slug` | The link. Without it, the page lists the links, one card per title. Links with the same title in one family (`meet` beside `15` and `60`, or `coffee` beside `coffee-15`) are one page's lengths: the page reads `GET <api>` to find them, offers each length, and books the one picked with its own link. |
 | `initial` | The link's first week, read on the server with `createClient(...).page(slug)`, so the page draws without waiting. |
 | `turnstileSiteKey` | Shows Cloudflare's widget and sends its token. |
-| `heading` | The link's title and a line on how to book. On unless `false`. |
+| `heading` | The link's title, and its length and call ("30m · Google Meet"). On unless `false`. |
 | `theme` | `"auto"` (the default), `"light"`, or `"dark"`. |
 | `linkHref` | `(slug) => href` for the list of links. Without it, a link opens in place. |
 | `injectStyles` | The component adds its stylesheet to the document. Pass `false` and import `@coordination/booking/styles.css` yourself to avoid a flash on server-rendered pages. |
@@ -138,18 +138,18 @@ Daybreak's own `daybreak.coordination.sh/api/u/<name>` answers the same routes, 
 
 ### Styling
 
-Colors come from Daybreak's First Light tokens as CSS custom properties, with First Light's values as defaults. Set any of them on the element or a parent:
+The page draws like Daybreak's own booking page: the system font, one blue accent, a week grid with open time washed blue and a star on the times best for the host, and a card for the form. It paints no background of its own, so it sits on your page's. Set any of these custom properties on the element or a parent:
 
 | Property | Used for | Default (light / dark) |
 | --- | --- | --- |
-| `--fl-accent` | buttons, the picked time, focus | `#0088ff` / `#0091ff` |
-| `--fl-on-accent` | words on the accent | `#ffffff` |
-| `--fl-running` | open time, the done check | `#28b44b` / `#2dbf50` |
-| `--fl-sun` | the times best for the host | `#ff9e47` |
-| `--fl-today-red` | errors | `#ff3b30` / `#e03c33` |
-| `--fl-ground-schedule` | inputs and outlined buttons | `#ffffff` / `#141518` |
+| `--dbk-accent` | open time, the meeting, buttons, focus; `--fl-accent` when set | `#007aff` / `#0a84ff` |
+| `--dbk-ink` | words, and hairlines at a few percent of it | `#1d1d1f` / `#f5f5f7` |
+| `--dbk-ground` | the grid and the fields | `#ffffff` / `#161617` |
+| `--dbk-raised` | the chosen length | `#ffffff` / `#323233` |
+| `--dbk-red` | the now line and errors | `#ff3b30` / `#e03c33` |
+| `--dbk-font` | every word | the system font |
 
-The grays aren't First Light tokens: `--dbk-text`, `--dbk-muted`, `--dbk-line`, `--dbk-card`, and `--dbk-font` (the page's font unless set). The layout follows its own width, not the window's: under 48rem it shows one Day's times as a list, and from 60rem the form sits beside the week.
+The layout follows its own width, not the window's: under 872px the card goes under a grid of three Days and a bar at the foot carries the picked time; wider, the card sits beside as many Days as fit, up to seven.
 
 ## The client: `createClient`
 
