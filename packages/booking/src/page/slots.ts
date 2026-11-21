@@ -1,4 +1,4 @@
-import type { BookingDay, Span } from "../types.js";
+import type { BookingDay, Span } from "../types";
 
 /**
  * Where a booking may start. Daybreak takes any start on the quarter hour

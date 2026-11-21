@@ -1,6 +1,6 @@
-import type { BookingDay } from "../types.js";
-import { daysBetween } from "./days.js";
-import { minutesIntoDate, zonedDate, zonedTime } from "./zones.js";
+import type { BookingDay } from "../types";
+import { daysBetween } from "./page";
+import { minutesIntoDate, zonedDate, zonedTime } from "./zones";
 
 /**
  * The week strip's vertical axis: the host's wall clock on each Day, so 9

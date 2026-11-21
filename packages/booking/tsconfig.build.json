@@ -10,5 +10,7 @@
     "noEmit": false,
     "types": []
   },
-  "include": ["src"]
+  // The server side only: the client, the handler, and their types. The
+  // booking page is bundled by esbuild (scripts/build.mjs).
+  "include": ["src/index.ts"]
 }

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "sourceMap": false,
+    "types": []
+  },
+  // The declarations for `./react` and `./element`, whose code esbuild bundles.
+  "include": ["src/react/index.ts", "src/element/index.ts", "src/meet/css.d.ts"]
+}

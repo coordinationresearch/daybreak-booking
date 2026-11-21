@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-
-import { WEEK } from "../page/days.js";
+import { READ_DAYS } from "../page/page.js";
 import { type BookResult, MESSAGES, readBookingAnswer } from "../page/request.js";
 import type { BookingPage, BookingRequest, ListedLink } from "../types.js";
 
@@ -32,12 +30,12 @@ export type Transport = {
 
 /**
  * `days` as a fresh read asks for it. A CDN keeps each read for a minute by
- * its address, so a read just after a booking asks for the same week as
- * `days=07`: an address the cache hasn't seen, which both `bookingHandler`
+ * its address, so a read just after a booking asks for the same Days as
+ * `days=028`: an address the cache hasn't seen, which both `bookingHandler`
  * and the Daybreak site's proxy take (the site's refuses any parameter but
  * `from` and `days`, so a cache-busting parameter of its own isn't an option).
  */
-export const FRESH_DAYS = `0${WEEK}`;
+export const FRESH_DAYS = `0${READ_DAYS}`;
 
 /**
  * The `registration` a page's body carries when the Daybreak site's proxy
@@ -73,7 +71,7 @@ export function createTransport(api: string, send: typeof fetch = (...args) => f
       // `from` first, then `days`: the one order the Daybreak site's proxy answers without a redirect.
       const query = new URLSearchParams();
       if (from) query.set("from", from);
-      query.set("days", options.fresh ? FRESH_DAYS : String(WEEK));
+      query.set("days", options.fresh ? FRESH_DAYS : String(READ_DAYS));
       const { status, body } = await read(`${base(api)}/${encodeURIComponent(slug)}?${query}`);
       if (status === 200 && typeof body === "object" && body !== null && "days" in body) {
         return { status: "open", page: body as BookingPage };
@@ -104,68 +102,4 @@ export function createTransport(api: string, send: typeof fetch = (...args) => f
       }
     },
   };
-}
-
-/** How long a week's open time is shown without asking again. */
-const FRESH_MS = 30_000;
-
-/** How long a shared cache may keep a read: `bookingHandler`'s default and the site's. */
-const CDN_MS = 60_000;
-
-/**
- * One week of open time at a time, keeping the last week on screen while the
- * next loads, as react-query's `keepPreviousData` did on /meet. Weeks are
- * kept by link and first Day, so a length's sibling link reads its own.
- * `invalidate` forgets every week after a booking changes the open time.
- */
-export function useWeek(
-  transport: Transport,
-  slug: string,
-  from: string,
-  initial: { slug: string; from: string; page: BookingPage },
-) {
-  const key = (s: string, f: string) => `${s} ${f}`;
-  const cache = useRef(
-    new Map<string, { at: number; read: PageRead }>([
-      [key(initial.slug, initial.from), { at: Date.now(), read: { status: "open", page: initial.page } }],
-    ]),
-  );
-  const [shown, setShown] = useState<{ key: string; read: PageRead }>({
-    key: key(initial.slug, initial.from),
-    read: { status: "open", page: initial.page },
-  });
-  const [version, setVersion] = useState(0);
-  const [loading, setLoading] = useState(false);
-  // Until then, every read skips the CDN's copy, which may predate the booking.
-  const freshUntil = useRef(0);
-  const wanted = key(slug, from);
-
-  useEffect(() => {
-    const hit = cache.current.get(wanted);
-    if (hit && Date.now() - hit.at < FRESH_MS) {
-      setShown({ key: wanted, read: hit.read });
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void transport.page(slug, from, { fresh: Date.now() < freshUntil.current }).then((read) => {
-      if (read.status === "open") cache.current.set(wanted, { at: Date.now(), read });
-      if (cancelled) return;
-      setShown({ key: wanted, read });
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transport, slug, from, wanted, version]);
-
-  const refetch = useCallback(() => setVersion((v) => v + 1), []);
-  const invalidate = useCallback(() => {
-    cache.current.clear();
-    freshUntil.current = Date.now() + CDN_MS;
-    setVersion((v) => v + 1);
-  }, []);
-
-  return { read: shown.read, isPlaceholder: shown.key !== wanted || loading, refetch, invalidate };
 }

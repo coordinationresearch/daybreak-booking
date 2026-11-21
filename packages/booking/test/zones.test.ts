@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bareClockLabel,
   clockLabel,
   compactRangeLabel,
   dateLabel,
   dayLabel,
+  hourLabel,
   minutesIntoDate,
   offsetMinutes,
   rangeLabel,
   sameClock,
-  shortClockLabel,
+  shortRange,
   slotSentence,
   slotText,
+  untilLabel,
   zoneCity,
   zoneLabel,
   zonedDate,
@@ -35,10 +38,15 @@ describe("reading a moment in a zone", () => {
   it("reads noon and midnight on a 12-hour clock", () => {
     expect(clockLabel(Date.UTC(2026, 10, 10, 20), PT)).toBe("12:00 PM");
     expect(clockLabel(Date.UTC(2026, 10, 10, 8), PT)).toBe("12:00 AM");
-    expect(shortClockLabel(Date.UTC(2026, 10, 10, 20, 30), PT)).toBe(
-      "12:30 PM",
-    );
-    expect(shortClockLabel(Date.UTC(2026, 10, 10, 17), PT)).toBe("9 AM");
+  });
+
+  it("writes the schedule's short hour labels", () => {
+    expect(hourLabel(Date.UTC(2026, 10, 10, 17), PT)).toBe("9a");
+    expect(hourLabel(Date.UTC(2026, 10, 10, 20), PT)).toBe("12p");
+    expect(hourLabel(Date.UTC(2026, 10, 10, 8), PT)).toBe("12a");
+    expect(hourLabel(Date.UTC(2026, 10, 10, 0), PT)).toBe("4p");
+    expect(hourLabel(ELEVEN_PT, "Asia/Kolkata")).toBe("12:30a");
+    expect(bareClockLabel(ELEVEN_PT, ET)).toBe("2:00");
   });
 
   it("writes a narrow range with one AM or PM when it can", () => {
@@ -127,5 +135,46 @@ describe("a slot on both clocks", () => {
     expect(slotSentence(text, "Sam")).toBe(
       "Tue, Nov 10th, 11:00 AM to 11:30 AM your time",
     );
+  });
+});
+
+describe("the card's short times", () => {
+  const HOUR = 3_600_000;
+
+  it("drops the start's a or p when both ends share it", () => {
+    expect(shortRange(ELEVEN_PT, ELEVEN_PT + HOUR / 2, PT)).toEqual({
+      start: "11:00",
+      end: "11:30a",
+    });
+    expect(
+      shortRange(ELEVEN_PT + HOUR / 2, ELEVEN_PT + 1.5 * HOUR, PT),
+    ).toEqual({ start: "11:30a", end: "12:30p" });
+  });
+
+  it("counts the days to a start, and its hours when it's under a day off", () => {
+    // 5:36 PM Monday: tomorrow, 17 hours off.
+    expect(untilLabel(ELEVEN_PT, ELEVEN_PT - 17.4 * HOUR, PT)).toEqual({
+      day: "tomorrow",
+      time: "in 17h",
+    });
+    expect(untilLabel(ELEVEN_PT, ELEVEN_PT - 0.3 * HOUR, PT)).toEqual({
+      day: "today",
+      time: "in 1h",
+    });
+    // 9 AM Monday is a day and two hours off: tomorrow, and no hours.
+    expect(untilLabel(ELEVEN_PT, ELEVEN_PT - 26 * HOUR, PT)).toEqual({
+      day: "tomorrow",
+      time: null,
+    });
+    expect(untilLabel(ELEVEN_PT, ELEVEN_PT - 50 * HOUR, PT).day).toBe(
+      "in 2 days",
+    );
+    expect(untilLabel(ELEVEN_PT, ELEVEN_PT - 70 * HOUR, PT).day).toBe(
+      "in 3 days",
+    );
+    expect(untilLabel(ELEVEN_PT, ELEVEN_PT + HOUR, PT)).toEqual({
+      day: null,
+      time: null,
+    });
   });
 });

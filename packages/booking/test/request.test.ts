@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { daysFitting, lengthLabel, lengthWords, stepLabel, weekStart, windowStart } from "../src/page/days.js";
+import { daysFitting, lengthLabel, lengthWords, stepLabel, windowStart } from "../src/page/page.js";
 import {
   MESSAGES,
   REQUEST_ID,
@@ -155,13 +155,6 @@ describe("page helpers", () => {
     expect(windowStart("2026-11-10", "2026-11-30", 3)).toBe("2026-11-13");
     expect(windowStart("2026-11-10", "2026-11-30", 21)).toBeNull();
     expect(windowStart("2026-11-10", "2026-11-30", -3)).toBeNull();
-  });
-
-  it("steps weeks inside the bookable Days", () => {
-    expect(weekStart("2026-11-10", "2026-11-30", 0)).toBe("2026-11-10");
-    expect(weekStart("2026-11-10", "2026-11-30", 2)).toBe("2026-11-24");
-    expect(weekStart("2026-11-10", "2026-11-30", 3)).toBeNull();
-    expect(weekStart("2026-11-10", "2026-11-30", -1)).toBeNull();
   });
 });
 

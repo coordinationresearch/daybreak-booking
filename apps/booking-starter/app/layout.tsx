@@ -10,6 +10,11 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: "light dark",
+  // The booking page's own ground; it sets these again while it's shown.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f5f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e0e0f" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

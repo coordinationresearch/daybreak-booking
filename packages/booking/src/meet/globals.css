@@ -1,0 +1,88 @@
+/*
+ * What the booking page took from the rest of /meet's site: its colour
+ * tokens, the border colour every element starts with, and its links'
+ * quiet underlines. On /meet these sit on :root, <html>, and <body>; here
+ * on `.dbk-meet`, the page's own box, so they reach no further than the
+ * page. scripts/build.mjs moves Tailwind's reset there the same way.
+ */
+.dbk-meet {
+  --background: 60 9% 98%;
+  --foreground: 25 7% 24%;
+  --card: 60 9% 98%;
+  --card-foreground: 25 7% 24%;
+  --popover: 60 9% 98%;
+  --popover-foreground: 25 7% 24%;
+  --primary: 25 7% 24%;
+  --primary-foreground: 60 9% 98%;
+  --secondary: 60 5% 96%;
+  --secondary-foreground: 25 7% 24%;
+  --muted: 60 5% 96%;
+  --muted-foreground: 24 6% 32%;
+  --accent: 60 5% 96%;
+  --accent-foreground: 25 7% 24%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 60 9% 98%;
+  --border: 20 6% 88%;
+  --input: 20 6% 88%;
+  --ring: 25 7% 24%;
+  --radius: 0.5rem;
+  min-height: 100%;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Georgia, serif;
+}
+.dbk-meet.dark {
+  --background: 24 10% 6%;
+  --foreground: 24 6% 83%;
+  --card: 24 10% 6%;
+  --card-foreground: 24 6% 83%;
+  --popover: 24 10% 6%;
+  --popover-foreground: 24 6% 83%;
+  --primary: 24 6% 83%;
+  --primary-foreground: 24 10% 6%;
+  --secondary: 12 6% 15%;
+  --secondary-foreground: 24 6% 83%;
+  --muted: 12 6% 12%;
+  --muted-foreground: 24 5% 75%;
+  --accent: 12 6% 15%;
+  --accent-foreground: 24 6% 83%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 60 9% 98%;
+  --border: 12 6% 15%;
+  --input: 12 6% 15%;
+  --ring: 24 6% 83%;
+}
+:where(.dbk-meet) * {
+  border-color: hsl(var(--border));
+}
+:where(.dbk-meet) a {
+  text-decoration-color: hsl(var(--foreground) / 0.15);
+}
+:where(.dbk-meet) a:hover {
+  text-decoration-color: hsl(var(--foreground) / 0.3);
+}
+
+/* The host's initials, where /meet draws its photo, when the page has no
+   photo: the accent's disc, the letters sized to the box it's drawn in. */
+:where(.dbk-monogram) {
+  width: var(--dbk-size);
+  height: var(--dbk-size);
+}
+.dbk-monogram {
+  display: inline-grid;
+  place-items: center;
+  container-type: size;
+  border-radius: 9999px;
+  background: rgb(var(--mt-accent, 0 122 255));
+  color: #fff;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dbk-monogram > span {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif;
+  font-size: 40cqmin;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}

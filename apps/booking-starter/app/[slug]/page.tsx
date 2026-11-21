@@ -1,5 +1,6 @@
-// `/<slug>`: one link's page. Its first week is read on the server, so the times draw without
-// waiting, and Next keeps the page for 60 seconds, as the proxy's reads are kept.
+// `/<slug>`: one link's page, drawn for the whole screen. Its first four weeks are read on the
+// server, so the times draw without waiting, and Next keeps the page for 60 seconds, as the
+// proxy's reads are kept.
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -15,7 +16,7 @@ const SLUG = /^[a-z0-9-]{1,64}$/;
 const firstWeek = cache(async (slug: string): Promise<BookingPage | null | undefined> => {
   if (!SLUG.test(slug)) return null;
   try {
-    return await daybreak().page(slug);
+    return await daybreak().page(slug, { days: 28 });
   } catch (error) {
     if (error instanceof BookingError && error.code === "not_found") return null;
     // Anything else (missing variables, a paused page, the deployment not answering): the page
@@ -36,9 +37,6 @@ export default async function LinkPage({ params }: Props) {
   const { slug } = await params;
   const page = await firstWeek(slug);
   if (page === null) notFound();
-  return (
-    <main>
-      <Booking slug={slug} initial={page} />
-    </main>
-  );
+  // The page brings its own <main>.
+  return <Booking slug={slug} initial={page} />;
 }

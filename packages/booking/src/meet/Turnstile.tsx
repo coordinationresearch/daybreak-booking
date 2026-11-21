@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef } from "react";
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 type TurnstileApi = {
   render: (
@@ -66,11 +66,13 @@ export const TurnstileHostContext = createContext<HTMLElement | null>(null);
  */
 export const Turnstile = forwardRef<
   TurnstileHandle,
-  { siteKey: string; onToken: (token: string | null) => void; theme?: "auto" | "light" | "dark" }
->(function Turnstile({ siteKey, onToken, theme = "auto" }, ref) {
+  { siteKey: string; onToken: (token: string | null) => void }
+>(function Turnstile({ siteKey, onToken }, ref) {
   const own = useRef<HTMLDivElement>(null);
   const host = useContext(TurnstileHostContext);
   const container = { get current() { return host ?? own.current; } };
+  // The slot's box stands in for /meet's div, which is hidden while empty.
+  const [drawn, setDrawn] = useState(false);
   const widget = useRef<string | null>(null);
   const tokenHandler = useRef(onToken);
   useEffect(() => {
@@ -96,11 +98,12 @@ export const Turnstile = forwardRef<
           action: "booking",
           appearance: "interaction-only",
           size: "flexible",
-          theme,
+          theme: "auto",
           callback: (token) => tokenHandler.current(token),
           "expired-callback": () => tokenHandler.current(null),
           "error-callback": () => tokenHandler.current(null),
         });
+        setDrawn(true);
       })
       .catch(() => tokenHandler.current(null));
     return () => {
@@ -112,7 +115,13 @@ export const Turnstile = forwardRef<
     };
     // `container` reads `host` or the div; `host` is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey, host, theme]);
+  }, [siteKey, host]);
 
-  return host ? <slot name="turnstile" /> : <div ref={own} className="dbk-turnstile" />;
+  return host ? (
+    <div className={drawn ? "min-h-0" : "hidden"}>
+      <slot name="turnstile" />
+    </div>
+  ) : (
+    <div ref={own} className="min-h-0 empty:hidden" />
+  );
 });

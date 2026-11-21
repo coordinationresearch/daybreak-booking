@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BookingDay } from "../src/types.js";
+import type { BookingDay } from "../src/page/page.js";
 import {
   GRID,
   bookableSpans,

@@ -1,4 +1,4 @@
-/* The page around the booking component. Its own colors are CSS variables: see the package's README, Styling. */
+/* The page around the booking component, on the ground it paints itself (the package's README, Styling). */
 :root {
   color-scheme: light dark;
   --page-ground: #f5f5f7;
@@ -6,7 +6,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --page-ground: #0b0c0e;
+    --page-ground: #0e0e0f;
   }
 }
 

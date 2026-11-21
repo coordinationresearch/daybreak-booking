@@ -9,7 +9,7 @@ A small Next.js site that shows your Daybreak Booking links and books them, on y
 | Address | |
 | --- | --- |
 | `/` | Your listed links. Each opens at `/<slug>`. |
-| `/<slug>` | One link's page: open times, lengths, and the booking form. Its first week is read on the server, and Next keeps the page for 60 seconds. A private link works here too, by its slug. |
+| `/<slug>` | One link's page: open times, lengths, and the booking form. Its first four weeks are read on the server, and Next keeps the page for 60 seconds. A private link works here too, by its slug. |
 | `/api/booking/...` | The proxy the page calls, from `bookingHandler`. It holds your key and forwards each visitor's address, so the deployment counts visitors apart. |
 | `/health` | Whether your key works: `200 {"ok":true}`, or `503` with a `reason` (`missing`, `bad_url`, `unreachable`, `revoked`, or `turnstile`). It never shows the key or your deployment's address. Point an uptime check at it. |
 

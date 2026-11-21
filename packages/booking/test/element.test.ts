@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import "./support/jsdom-range.js";
+
 const PAGE = JSON.parse(readFileSync(join(process.cwd(), "fixtures/booking-api/cases.json"), "utf8")).cases.find(
   (c: { name: string }) => c.name === "page",
 ).response.body;
@@ -43,7 +45,7 @@ describe("<daybreak-booking>", () => {
     document.body.appendChild(element);
     await shadowText(element, "Meet with Sam");
     // The page, and the list beside it for the link's other lengths.
-    expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam/meet?days=7");
+    expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam/meet?days=28");
     expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam");
     expect(element.shadowRoot!.textContent).toContain("Google Meet");
     expect(element.shadowRoot!.querySelector("form")).toBeTruthy();

@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { lengthLabel } from "../page/days.js";
-import { type LengthChoice, type LinkGroup, lengthChoices, linkGroups, siblingsOf } from "../page/links.js";
+import { MeetScreen } from "../meet/MeetScreen.js";
+import { MeetHostContext, useResolvedTheme } from "../meet/host.js";
+import { lengthLabel } from "../page/page.js";
+import { type LinkGroup, linkGroups, siblingsOf } from "../page/links.js";
 import type { BookingPage, ListedLink } from "../types.js";
-import { BookingPicker } from "./BookingPicker.js";
-import { type LinksRead, type PageRead, createTransport } from "./data.js";
+import { type LinksRead, type Transport, createTransport } from "./data.js";
 import { ArrowClockwiseIcon, CaretRightBoldIcon } from "./icons.js";
-import { Suffixed } from "./text.js";
 import { BOOKING_CSS } from "./styles.js";
+import { Suffixed } from "./text.js";
 
 export type DaybreakBookingProps = {
   /**
@@ -25,14 +26,18 @@ export type DaybreakBookingProps = {
    * each, and books the one picked with its own link.
    */
   slug?: string;
-  /** The link's first week, read on the server, so the page draws without waiting. */
+  /** The link's first 28 Days, read on the server, so the page draws without waiting. */
   initial?: BookingPage;
   /** Cloudflare Turnstile's site key. With it, a booking carries `turnstileToken`, which the proxy checks. */
   turnstileSiteKey?: string;
-  /** The link's title and its length and call, above the picker. On unless false. */
+  /** The link's title and its length and call, above the Days. On unless false. */
   heading?: boolean;
   /** "auto" (the default) follows the system's light or dark. */
   theme?: "auto" | "light" | "dark";
+  /** The host's photo, square, drawn in the ring of dust. Without it, the host's initials stand in its place. */
+  photo?: string;
+  /** The way back to the host's site, on the closed page and the ticket's back, as `{ href: "/", label: "example.com" }`. */
+  home?: { href: string; label: string };
   /** Where each listed link goes. Without it, picking a link opens it in place. */
   linkHref?: (slug: string) => string;
   /** Adds the page's stylesheet to its document or shadow root. On unless false, for a site that loads `@coordination/booking/styles.css` itself. */
@@ -43,12 +48,14 @@ export type DaybreakBookingProps = {
 };
 
 /**
- * A Daybreak booking page: a link's open time and a form to book it, or the
- * list of links. One component for React sites, `<daybreak-booking>`, and the
- * Daybreak site's `/u/` pages.
+ * A Daybreak booking page: a link's open time and a form to book it, drawn
+ * as Daybreak's own booking page draws it, or the list of links. One
+ * component for React sites, `<daybreak-booking>`, and the Daybreak site's
+ * `/u/` pages.
  */
 export function DaybreakBooking(props: DaybreakBookingProps) {
-  const { api, theme = "auto", injectStyles = true, className } = props;
+  const { api, injectStyles = true, className } = props;
+  const theme = useResolvedTheme(props.theme ?? "auto");
   const root = useRef<HTMLDivElement>(null);
   const transport = useMemo(() => createTransport(api, props.fetch), [api, props.fetch]);
   const [picked, setPicked] = useState<string | undefined>(undefined);
@@ -57,7 +64,10 @@ export function DaybreakBooking(props: DaybreakBookingProps) {
   useStyles(root, injectStyles);
 
   return (
-    <div ref={root} className={["dbk", className].filter(Boolean).join(" ")} data-theme={theme === "auto" ? undefined : theme}>
+    <div
+      ref={root}
+      className={["dbk-meet", theme === "dark" ? "dark" : null, className].filter(Boolean).join(" ")}
+    >
       {slug ? (
         <LinkPage
           key={slug}
@@ -67,10 +77,17 @@ export function DaybreakBooking(props: DaybreakBookingProps) {
           turnstileSiteKey={props.turnstileSiteKey}
           heading={props.heading ?? true}
           theme={theme}
-          onBack={props.slug ? undefined : () => setPicked(undefined)}
+          photo={props.photo}
+          home={props.home}
         />
       ) : (
-        <LinkList transport={transport} linkHref={props.linkHref} onPick={setPicked} heading={props.heading ?? true} />
+        <LinkList
+          transport={transport}
+          linkHref={props.linkHref}
+          onPick={setPicked}
+          heading={props.heading ?? true}
+          theme={theme}
+        />
       )}
     </div>
   );
@@ -112,85 +129,47 @@ function LinkPage({
   turnstileSiteKey,
   heading,
   theme,
-  onBack,
+  photo,
+  home,
 }: {
   slug: string;
-  transport: ReturnType<typeof createTransport>;
+  transport: Transport;
   initial: BookingPage | undefined;
   turnstileSiteKey: string | undefined;
   heading: boolean;
-  theme: "auto" | "light" | "dark";
-  onBack: (() => void) | undefined;
+  theme: "light" | "dark";
+  photo: string | undefined;
+  home: { href: string; label: string } | undefined;
 }) {
-  const idPrefix = `dbk${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const [read, setRead] = useState<PageRead | null>(initial ? { status: "open", page: initial } : null);
-  const [attempt, setAttempt] = useState(0);
   const [siblings, setSiblings] = useState<ListedLink[]>([]);
 
   // The list says which links are this one's other lengths. Without it, the page offers the link's own.
   useEffect(() => {
     let cancelled = false;
-    void transport.links().then((answer) => {
-      if (!cancelled && answer.status === "open") setSiblings(siblingsOf(answer.links, slug));
+    void transport.links().then((list) => {
+      if (!cancelled && list.status === "open") setSiblings(siblingsOf(list.links, slug));
     });
     return () => {
       cancelled = true;
     };
   }, [transport, slug]);
 
-  useEffect(() => {
-    if (initial && attempt === 0) return;
-    let cancelled = false;
-    setRead(null);
-    // A second read follows a failure or a changed page, so it skips the CDN's copy.
-    void transport.page(slug, undefined, { fresh: attempt > 0 }).then((answer) => {
-      if (!cancelled) setRead(answer);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transport, slug, initial, attempt]);
-
-  const page = read?.status === "open" ? read.page : null;
-
-  const choices: LengthChoice[] = page ? lengthChoices(page.link, siblings) : [];
+  const host = useMemo(
+    () => ({ theme, ...(photo ? { photo } : {}), ...(home ? { home } : {}) }),
+    [theme, photo, home],
+  );
 
   return (
-    <div className="dbk-stack">
-      {onBack && (
-        <button type="button" className="dbk-back" onClick={onBack}>
-          All links
-        </button>
-      )}
-      {read === null ? (
-        <p className="dbk-empty" aria-busy="true">
-          Loading open times...
-        </p>
-      ) : read.status === "closed" ? (
-        <p className="dbk-empty">{read.message}</p>
-      ) : read.status === "unavailable" ? (
-        <div className="dbk-empty">
-          The calendar didn&apos;t answer. Try again in a minute.
-          <button type="button" className="dbk-quiet dbk-quiet-sm" onClick={() => setAttempt((n) => n + 1)}>
-            <ArrowClockwiseIcon />
-            Try again
-          </button>
-        </div>
-      ) : (
-        <BookingPicker
-          key={attempt}
-          slug={slug}
-          theme={theme}
-          heading={heading}
-          choices={choices}
-          onReload={() => setAttempt((n) => n + 1)}
-          initial={read.page}
-          transport={transport}
-          idPrefix={idPrefix}
-          {...(turnstileSiteKey ? { turnstileSiteKey } : {})}
-        />
-      )}
-    </div>
+    <MeetHostContext.Provider value={host}>
+      <MeetScreen
+        slug={slug}
+        transport={transport}
+        siblings={siblings}
+        heading={heading}
+        {...(initial ? { initial } : {})}
+        {...(turnstileSiteKey ? { turnstileSiteKey } : {})}
+      />
+    </MeetHostContext.Provider>
   );
 }
 
@@ -199,11 +178,13 @@ function LinkList({
   linkHref,
   onPick,
   heading,
+  theme,
 }: {
-  transport: ReturnType<typeof createTransport>;
+  transport: Transport;
   linkHref: ((slug: string) => string) | undefined;
   onPick: (slug: string) => void;
   heading: boolean;
+  theme: "light" | "dark";
 }) {
   const [read, setRead] = useState<LinksRead | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -220,9 +201,9 @@ function LinkList({
   }, [transport, attempt]);
 
   return (
-    <div className="dbk-stack">
+    <div className="dbk dbk-list dbk-stack" data-theme={theme}>
       {heading && (
-        <header className="dbk-header">
+        <header>
           <h2 className="dbk-title">Book a time</h2>
         </header>
       )}
@@ -235,7 +216,7 @@ function LinkList({
       ) : read.status === "unavailable" ? (
         <div className="dbk-empty">
           The calendar didn&apos;t answer. Try again in a minute.
-          <button type="button" className="dbk-quiet dbk-quiet-sm" onClick={() => setAttempt((n) => n + 1)}>
+          <button type="button" className="dbk-quiet" onClick={() => setAttempt((n) => n + 1)}>
             <ArrowClockwiseIcon />
             Try again
           </button>

@@ -15,7 +15,7 @@ browser  ──>  your proxy (bookingHandler)  ──>  https://your-deployment.
 npm install @coordination/booking
 ```
 
-Node 20.19 or later, Vercel, Cloudflare Workers, Deno 2 or later, or Bun. No runtime dependencies; React 18 or 19 is a peer for `@coordination/booking/react` only.
+Node 20.19 or later, Vercel, Cloudflare Workers, Deno 2 or later, or Bun. The server side (`@coordination/booking`) imports nothing. The page's own libraries (framer-motion, two Radix parts, Phosphor's icons, and Tailwind's class helpers) install with the package for `@coordination/booking/react`, and React 18 or 19 is its peer. The custom element carries all of it inside.
 
 The package is ESM only. Node 20.19 and later can also `require()` it from CommonJS.
 
@@ -33,7 +33,7 @@ A `(Request) => Promise<Response>` that serves:
 | Route | Answers |
 | --- | --- |
 | `GET <basePath>` | `{ links: [{ slug, title, lengths }] }` |
-| `GET <basePath>/<slug>?from=YYYY-MM-DD&days=7` | the link's page: `{ link, timeZone, firstDay, lastDay, days, suggested }` |
+| `GET <basePath>/<slug>?from=YYYY-MM-DD&days=28` | the link's page for up to 28 Days: `{ link, timeZone, firstDay, lastDay, days, suggested }` |
 | `POST <basePath>/<slug>` | `{ booked: { start, end, title } }` |
 
 A POST must be `Content-Type: application/json` and at most 16 KB; anything else is refused before the deployment is called, so another site's page can't post a form to your proxy without a CORS preflight.
@@ -94,7 +94,7 @@ The handler and the client never follow a redirect: the key rides in a header, s
 
 #### Fresh reads
 
-A CDN keeps each read for `cacheSeconds` (60) by its address. Right after a booking, or a refused one, the page reads the week again for a minute as `days=07` rather than `days=7`: the same week, at an address the CDN hasn't kept. The handler takes it, and so does the Daybreak site's proxy, which refuses any query parameter but `from` and `days`. A proxy of your own with the same shape should take a `days` with a leading zero too.
+The page reads four weeks at a time (`days=28`). A CDN keeps each read for `cacheSeconds` (60) by its address. Right after a booking, or a refused one, the page reads its Days again for a minute as `days=028` rather than `days=28`: the same Days, at an address the CDN hasn't kept. The handler takes it, and so does the Daybreak site's proxy, which refuses any query parameter but `from` and `days`. A proxy of your own with the same shape should take a `days` with a leading zero too.
 
 ## The page
 
@@ -112,44 +112,35 @@ export default function Book() {
 | --- | --- |
 | `api` | The proxy's address. Required. |
 | `slug` | The link. Without it, the page lists the links, one card per title. Links with the same title in one family (`meet` beside `15` and `60`, or `coffee` beside `coffee-15`) are one page's lengths: the page reads `GET <api>` to find them, offers each length, and books the one picked with its own link. |
-| `initial` | The link's first week, read on the server with `createClient(...).page(slug)`, so the page draws without waiting. |
+| `initial` | The link's first four weeks, read on the server with `createClient(...).page(slug, { days: 28 })`, so the page draws without waiting. |
 | `turnstileSiteKey` | Shows Cloudflare's widget and sends its token. |
 | `heading` | The link's title, and its length and call ("30m · Google Meet"). On unless `false`. |
-| `theme` | `"auto"` (the default), `"light"`, or `"dark"`. |
+| `theme` | `"auto"` (the default, the visitor's setting), `"light"`, or `"dark"`. |
+| `photo` | The host's photo, a URL. Without it, the page draws the host's initials on the accent's disc where the photo goes. |
+| `home` | `{ href, label }`: the link on the back of the confirmation's ticket, beside the host's photo (as "example.com ↗"). Without it, the back shows the photo alone. |
 | `linkHref` | `(slug) => href` for the list of links. Without it, a link opens in place. |
 | `injectStyles` | The component adds its stylesheet to the document. Pass `false` and import `@coordination/booking/styles.css` yourself to avoid a flash on server-rendered pages. |
 
 ### Custom element: `@coordination/booking/element`
 
-React is bundled inside, so it works on any page. The bundle is about 85 KB gzipped, nearly all of it React and React DOM; on a React site, use `@coordination/booking/react` instead.
+React, framer-motion, and the stylesheet are bundled inside, so it works on any page. The bundle is about 230 KB gzipped; on a React site, use `@coordination/booking/react` instead, about 85 KB gzipped beside the libraries your site may already have.
 
 ```html
 <script type="module" src="https://unpkg.com/@coordination/booking@0.2.0/dist/element.js"></script>
 <daybreak-booking api="/api/booking" slug="meet"></daybreak-booking>
 ```
 
-Or `dist/element.global.js` with a plain `<script>`, or `import "@coordination/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, and `link-href` with `{slug}` in it, as `/book/{slug}`.
+Or `dist/element.global.js` with a plain `<script>`, or `import "@coordination/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, `photo`, `home-href` and `home-label` (the link on the back of the confirmation's ticket), and `link-href` with `{slug}` in it, as `/book/{slug}`.
 
-It draws in a shadow root, so your page's styles don't reach in. Cloudflare's widget draws in the light DOM and is slotted in. Importing the module during server rendering is safe: where `HTMLElement` doesn't exist, it registers nothing.
+It draws in a shadow root, so your page's styles don't reach in. Cloudflare's widget draws in the light DOM and is slotted in. One booking page per document: it's drawn for the whole screen, with fixed layers. Importing the module during server rendering is safe: where `HTMLElement` doesn't exist, it registers nothing.
 
 ### On the Daybreak site's proxy
 
-Daybreak's own `daybreak.coordination.sh/api/u/<name>` answers the same routes, and adds an opaque `registration` to each page it answers. The page sends it back beside `turnstileToken` when it books, and the site refuses a booking without the current one with 409 `changed` ("This booking page changed. Reload it to see current times."), so a page left open after the name moved to another host never books with them. The page shows that message with a Reload button that reads the page again. `bookingHandler` adds no `registration` and drops one a page sends.
+Daybreak's own `daybreak.coordination.sh/api/u/<name>` answers the same routes, and adds an opaque `registration` to each page it answers. The page sends it back beside `turnstileToken` when it books, and the site refuses a booking without the current one with 409 `changed` ("This booking page changed. Reload it to see current times."), so a page left open after the name moved to another host never books with them. The page shows that message and reads the page again past the CDN, so the next press of Book sends the current `registration`. `bookingHandler` adds no `registration` and drops one a page sends.
 
 ### Styling
 
-The page draws like Daybreak's own booking page: the system font, one blue accent, a week grid with open time washed blue and a star on the times best for the host, and a card for the form. It paints no background of its own, so it sits on your page's. Set any of these custom properties on the element or a parent:
-
-| Property | Used for | Default (light / dark) |
-| --- | --- | --- |
-| `--dbk-accent` | open time, the meeting, buttons, focus; `--fl-accent` when set | `#007aff` / `#0a84ff` |
-| `--dbk-ink` | words, and hairlines at a few percent of it | `#1d1d1f` / `#f5f5f7` |
-| `--dbk-ground` | the grid and the fields | `#ffffff` / `#161617` |
-| `--dbk-raised` | the chosen length | `#ffffff` / `#323233` |
-| `--dbk-red` | the now line and errors | `#ff3b30` / `#e03c33` |
-| `--dbk-font` | every word | the system font |
-
-The layout follows its own width, not the window's: under 872px the card goes under a grid of three Days and a bar at the foot carries the picked time; wider, the card sits beside as many Days as fit, up to seven.
+The page is Daybreak's own booking page, the same markup, styles, and motion: the photo in its ring of dust, the title's entrance, the week grid with open time washed blue and a star on the times best for the host, the card (a sheet on a phone), and the confirmation's ticket. It's drawn for the whole screen and paints its own ground inside its box, `#f5f5f7` in light and `#0e0e0f` in dark; give your page's `<html>` and `<body>` the same, with no margin, so overscroll and the space past the page match. While it's shown, it sets your page's `<meta name="theme-color">` tags to the same, and gives them back when it goes. Its look isn't configurable.
 
 ## The client: `createClient`
 

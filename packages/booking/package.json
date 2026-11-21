@@ -73,9 +73,23 @@
     "esbuild": "^0.25.12",
     "jsdom": "^27.4.0",
     "openapi-typescript": "^7.13.0",
+    "postcss": "8.5.33",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "tailwindcss": "3.4.19",
+    "tailwindcss-animate": "1.0.7",
     "typescript": "~5.9",
     "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "@radix-ui/react-slot": "1.2.4",
+    "@radix-ui/react-tooltip": "1.2.8",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "framer-motion": "12.24.7",
+    "motion-dom": "12.24.3",
+    "motion-utils": "12.23.28",
+    "tailwind-merge": "3.4.0"
   }
 }

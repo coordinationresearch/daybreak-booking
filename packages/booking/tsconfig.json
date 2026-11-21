@@ -13,7 +13,16 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "types": ["node"]
+    "types": ["node"],
+    // The booking page's files keep /meet's own imports; these say where
+    // each lands in this package. esbuild and vitest read the same map.
+    "paths": {
+      "~/lib/booking/*": ["./src/page/*"],
+      "~/lib/utils": ["./src/meet/ui/utils"],
+      "~/lib/useTapFirstCapability": ["./src/meet/ui/useTapFirstCapability"],
+      "~/components/ui/*": ["./src/meet/ui/*"],
+      "~/components/daylight/*": ["./src/meet/daylight/*"]
+    }
   },
   "include": ["src", "test", "scripts"]
 }
