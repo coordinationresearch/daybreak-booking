@@ -15,6 +15,8 @@ npm test        # builds the package, then runs its tests
 npm run typecheck
 ```
 
-`packages/booking/fixtures/` holds Daybreak's Booking API contract, copied from Daybreak's repo by its `scripts/sync-booking-fixtures.ts`: `booking-api/cases.json`, request and response pairs that Daybreak's own tests run against the deployment and this package's tests run against a fake one, and `openapi.json`, the API's OpenAPI document. Don't edit them here; see AGENTS.md.
+Node 20.19 or later.
+
+`packages/booking/fixtures/` holds Daybreak's Booking API contract: `booking-api/cases.json`, request and response pairs that Daybreak's own tests run against the deployment and this package's tests run against a fake one, and `openapi.json`, the API's OpenAPI document. The maintainer syncs both from Daybreak, so don't edit them here. If the API seems to answer something the contract doesn't say, open an issue.
 
 MIT licensed.

@@ -8,18 +8,21 @@ A public MIT repo. Everything here ships to strangers, so:
 ## Layout
 
 - `packages/booking/`: `@daybreak/booking`.
-  - `src/client.ts`, `src/handler.ts`: the server side, which refuses to run where `window` exists.
+  - `src/client.ts`, `src/handler.ts`: the server side, which refuses to run in a browser page or a web worker, and throws at construction without a key.
   - `src/page/`: the page's pure rules (quarter-hour starts, two time zones, request IDs, what each refusal means). Tested in `test/slots`, `zones`, and `request`.
   - `src/react/`: the page. `DaybreakBooking` is the entry; `BookingPicker`, `WeekStrip`, and `TimeList` are the picker; `styles.ts` is its one stylesheet, scoped under `.dbk`.
   - `src/element/`: `<daybreak-booking>`, bundled with React by `scripts/build.mjs`.
   - `src/api.gen.ts`: generated from `fixtures/openapi.json` by `npm run generate`. Never edit it; the build fails while it's stale.
-  - `fixtures/`: Daybreak's contract, copied in from Daybreak's repo by its `scripts/sync-booking-fixtures.ts`. Change the contract in Daybreak (`convex/bookingApi.ts`, `fixtures/booking-api/`), sync, then `npm run generate`.
+  - `fixtures/`: Daybreak's contract, `openapi.json` and `booking-api/cases.json`. The maintainer syncs both from Daybreak, whose repo isn't public, with its `scripts/sync-booking-fixtures.ts`, then runs `npm run generate`. Don't edit them here, and don't ask a contributor to change Daybreak: when the contract looks wrong, open an issue for the maintainer. `test/contract.test.ts` fails when the two files disagree on a route or a status, as after syncing one without the other.
 
 ## The API's rules
 
-- The page calls only its proxy: `GET <api>`, `GET <api>/<slug>?from=&days=`, `POST <api>/<slug>` with `turnstileToken` beside the booking. `bookingHandler` and the Daybreak site's `/api/u/<name>` both answer that shape; keep them the same.
-- v1 only grows. Read new fields as optional, and never send a field the OpenAPI document doesn't have.
-- The handler forwards the visitor's address in `X-Daybreak-Booking-Client` beside the key in `X-Daybreak-Booking-Key`, and never lets the deployment's address reach a response, a header, or a log.
+- The page calls only its proxy: `GET <api>`, `GET <api>/<slug>?from=&days=` (in that order), `POST <api>/<slug>` as `application/json` with `turnstileToken` beside the booking. `bookingHandler` and the Daybreak site's `/api/u/<name>` both answer that shape; keep them the same.
+- The site's proxy refuses any GET parameter but `from` and `days`. A read that must skip a CDN's copy asks for `days=07` instead of `days=7`, which both proxies take.
+- The site's proxy puts an opaque `registration` on each page it answers and wants it back in the POST, or answers 409 `changed`. The page sends it back when the page body has one; `bookingHandler` drops it, as it does `turnstileToken`. Those two are the proxies' fields; never send the deployment a field its OpenAPI document doesn't have.
+- v1 only grows. Read new fields as optional.
+- The handler forwards the visitor's address in `X-Daybreak-Booking-Client` beside the key in `X-Daybreak-Booking-Key`, and never lets the deployment's address reach a response, a header, or a log. It trusts an address header only where the platform overwrites it (Cloudflare Workers, Vercel), never `x-forwarded-for`, unless the site passes `clientAddress`.
+- Every upstream fetch, the deployment's and Turnstile's, sets `redirect: "error"`, so the key never follows a redirect.
 
 ## Checks
 

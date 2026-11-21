@@ -15,7 +15,9 @@ browser  ──>  your proxy (bookingHandler)  ──>  https://your-deployment.
 npm install @daybreak/booking
 ```
 
-Node 20 or later, Vercel, Cloudflare Workers, Deno, or Bun. No runtime dependencies; React 18 or 19 is a peer for `@daybreak/booking/react` only.
+Node 20.19 or later, Vercel, Cloudflare Workers, Deno 2 or later, or Bun. No runtime dependencies; React 18 or 19 is a peer for `@daybreak/booking/react` only.
+
+The package is ESM only. Node 20.19 and later can also `require()` it from CommonJS.
 
 ## You need
 
@@ -34,7 +36,9 @@ A `(Request) => Promise<Response>` that serves:
 | `GET <basePath>/<slug>?from=YYYY-MM-DD&days=7` | the link's page: `{ link, timeZone, firstDay, lastDay, days, suggested }` |
 | `POST <basePath>/<slug>` | `{ booked: { start, end, title } }` |
 
-Refusals answer `{ error: { code, message } }`: the deployment's own (`invalid` 400, `not_found` 404, `taken` 409, `too_many` 429, `closed` 503), or `forbidden` 403 when the person check fails and `unavailable` 502 when the deployment doesn't answer. Reads carry `Cache-Control: s-maxage=60` so a CDN shares them; bookings and refusals are never cached. No response carries the deployment's address.
+A POST must be `Content-Type: application/json` and at most 16 KB; anything else is refused before the deployment is called, so another site's page can't post a form to your proxy without a CORS preflight.
+
+Refusals answer `{ error: { code, message } }`: the deployment's own (`invalid` 400, `not_found` 404, `taken` 409, `too_many` 429, `closed` 503), or `invalid` 415 for a body that isn't JSON, `forbidden` 403 when the person check fails, and `unavailable` 502 when the deployment doesn't answer. Reads carry `Cache-Control: s-maxage=60` so a CDN shares them; bookings and refusals are never cached. No response carries the deployment's address.
 
 Next.js, `app/api/booking/[[...path]]/route.ts`:
 
@@ -44,12 +48,14 @@ import { bookingHandler } from "@daybreak/booking";
 const handler = bookingHandler({
   url: process.env.DAYBREAK_URL!,
   key: process.env.DAYBREAK_BOOKING_KEY!,
-  turnstileSecret: process.env.TURNSTILE_SECRET_KEY, // optional
+  turnstileSecret: process.env.TURNSTILE_SECRET_KEY, // leave this line out to book without a person check
   basePath: "/api/booking", // the default
 });
 
 export { handler as GET, handler as POST };
 ```
+
+On Vercel the handler reads the visitor's address from `x-real-ip`, which Vercel sets itself. Hosted anywhere else, pass `clientAddress` (below).
 
 Cloudflare Workers:
 
@@ -63,9 +69,32 @@ export default {
 };
 ```
 
-The handler reads the visitor's address from `x-real-ip`, then `cf-connecting-ip`, then the first entry of `x-forwarded-for`, and sends it beside the key, so the deployment's per-caller limit counts each visitor apart. Behind a proxy that lets visitors set those headers themselves, strip them first.
+On Workers the handler reads the visitor's address from `cf-connecting-ip`, which Cloudflare sets itself.
 
-Without `turnstileSecret`, the handler books without a person check; the deployment's own limits still apply. With it, a POST needs `turnstileToken` in its body, which the page sends when it has `turnstileSiteKey`.
+#### The visitor's address
+
+The handler sends the visitor's address beside the key, so the deployment's per-sender limit counts each visitor apart, and passes it to Turnstile as `remoteip`. It trusts a header only where the platform overwrites whatever the visitor sent: `cf-connecting-ip` on Cloudflare Workers, `x-real-ip` on Vercel (it checks `process.env.VERCEL`). Anywhere else it reads none, and never `x-forwarded-for`, since a visitor who sets one could look like a new sender on every request. Without an address, every visitor shares the key's limit.
+
+Behind your own proxy, say which header it sets, and only one it overwrites:
+
+```ts
+bookingHandler({
+  url: process.env.DAYBREAK_URL!,
+  key: process.env.DAYBREAK_BOOKING_KEY!,
+  // nginx: proxy_set_header X-Real-IP $remote_addr;
+  clientAddress: (request) => request.headers.get("x-real-ip") ?? undefined,
+});
+```
+
+#### Secrets
+
+`key` is required: the handler and `createClient` throw at construction without one. Turnstile is opt-in by leaving `turnstileSecret` out; the handler then books without a person check, and the deployment's own limits still apply. Passing it empty, as `process.env.TURNSTILE_SECRET_KEY` is when the variable isn't set, throws, so a missing variable can't turn the check off without a word. With it, a POST needs `turnstileToken` in its body, which the page sends when it has `turnstileSiteKey`.
+
+The handler and the client never follow a redirect: the key rides in a header, so a deployment that answers with one gets the `unavailable` error instead.
+
+#### Fresh reads
+
+A CDN keeps each read for `cacheSeconds` (60) by its address. Right after a booking, or a refused one, the page reads the week again for a minute as `days=07` rather than `days=7`: the same week, at an address the CDN hasn't kept. The handler takes it, and so does the Daybreak site's proxy, which refuses any query parameter but `from` and `days`. A proxy of your own with the same shape should take a `days` with a leading zero too.
 
 ## The page
 
@@ -92,7 +121,7 @@ export default function Book() {
 
 ### Custom element: `@daybreak/booking/element`
 
-React is bundled inside, so it works on any page:
+React is bundled inside, so it works on any page. The bundle is about 85 KB gzipped, nearly all of it React and React DOM; on a React site, use `@daybreak/booking/react` instead.
 
 ```html
 <script type="module" src="https://unpkg.com/@daybreak/booking@0.1.0/dist/element.js"></script>
@@ -101,7 +130,11 @@ React is bundled inside, so it works on any page:
 
 Or `dist/element.global.js` with a plain `<script>`, or `import "@daybreak/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, and `link-href` with `{slug}` in it, as `/book/{slug}`.
 
-It draws in a shadow root, so your page's styles don't reach in. Cloudflare's widget draws in the light DOM and is slotted in.
+It draws in a shadow root, so your page's styles don't reach in. Cloudflare's widget draws in the light DOM and is slotted in. Importing the module during server rendering is safe: where `HTMLElement` doesn't exist, it registers nothing.
+
+### On the Daybreak site's proxy
+
+Daybreak's own `daybreak.coordination.sh/api/u/<name>` answers the same routes, and adds an opaque `registration` to each page it answers. The page sends it back beside `turnstileToken` when it books, and the site refuses a booking without the current one with 409 `changed` ("This booking page changed. Reload it to see current times."), so a page left open after the name moved to another host never books with them. The page shows that message with a Reload button that reads the page again. `bookingHandler` adds no `registration` and drops one a page sends.
 
 ### Styling
 
@@ -120,12 +153,12 @@ The grays aren't First Light tokens: `--dbk-text`, `--dbk-muted`, `--dbk-line`, 
 
 ## The client: `createClient`
 
-For your own server code, such as rendering the first week or an agent's backend. It refuses to run where `window` exists, so a key never ships to a browser.
+For your own server code, such as rendering the first week or an agent's backend. It refuses to run in a browser page (where `window` and `document` both exist) or a web worker, so a key never ships to a browser. It needs a key.
 
 ```ts
 import { BookingError, createClient } from "@daybreak/booking";
 
-const daybreak = createClient({ url: process.env.DAYBREAK_URL!, key: process.env.DAYBREAK_BOOKING_KEY });
+const daybreak = createClient({ url: process.env.DAYBREAK_URL!, key: process.env.DAYBREAK_BOOKING_KEY! });
 
 const { links } = await daybreak.links();
 const page = await daybreak.page("meet", { from: "2026-10-12", days: 7 });
