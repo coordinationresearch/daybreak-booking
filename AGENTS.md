@@ -15,6 +15,8 @@ A public MIT repo. Everything here ships to strangers, so:
   - `src/api.gen.ts`: generated from `fixtures/openapi.json` by `npm run generate`. Never edit it; the build fails while it's stale.
   - `fixtures/`: Daybreak's contract, `openapi.json` and `booking-api/cases.json`. The maintainer syncs both from Daybreak, whose repo isn't public, with its `scripts/sync-booking-fixtures.ts`, then runs `npm run generate`. Don't edit them here, and don't ask a contributor to change Daybreak: when the contract looks wrong, open an issue for the maintainer. `test/contract.test.ts` fails when the two files disagree on a route or a status, as after syncing one without the other.
 
+- `apps/booking-starter/`: the starter, a Next.js app on the workspace's `@daybreak/booking`. `lib/daybreak.ts` makes the client and the proxy on first use, so `next build` runs without the variables; `app/health/route.ts` answers whether the key works and never shows the key or the deployment's address. Its README has the Deploy button, whose URL names this repo and `apps/booking-starter`; keep both in step with a move.
+
 ## The API's rules
 
 - The page calls only its proxy: `GET <api>`, `GET <api>/<slug>?from=&days=` (in that order), `POST <api>/<slug>` as `application/json` with `turnstileToken` beside the booking. `bookingHandler` and the Daybreak site's `/api/u/<name>` both answer that shape; keep them the same.
@@ -26,7 +28,7 @@ A public MIT repo. Everything here ships to strangers, so:
 
 ## Checks
 
-`npm test` from the root builds the package and runs everything, including the element bundle in jsdom. `npm run typecheck`. Before a release, `npm pack --dry-run -w @daybreak/booking` and read the file list.
+`npm test` from the root builds the package and runs everything, including the element bundle in jsdom. `npm run typecheck`. After changing the starter, `npm run build -w booking-starter`. Before a release, `npm pack --dry-run -w @daybreak/booking` and read the file list.
 
 ## Releases
 

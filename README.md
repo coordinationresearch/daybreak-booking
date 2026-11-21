@@ -3,7 +3,7 @@
 Booking pages for [Daybreak](https://daybreak.coordination.sh), the daily planner and time tracker: put your Daybreak Booking links on your own website.
 
 - [`packages/booking`](packages/booking): `@daybreak/booking` on npm. A proxy handler for your server, a server client, and the booking page as a React component and a `<daybreak-booking>` custom element. Its README is the guide.
-- `apps/booking-starter` (coming): a site you deploy to Vercel in one click and change as you like.
+- [`apps/booking-starter`](apps/booking-starter): a Next.js site you deploy to Vercel in one click and change as you like, with a `/health` check for your key.
 
 Daybreak's own `daybreak.coordination.sh/u/<name>` pages draw the same element.
 
