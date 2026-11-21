@@ -16,11 +16,9 @@ import type { BookingPage, BookingRequest } from "../types";
  * reads every block again.
  */
 
-/** The transport, the slug each length books with, and `registration`, from the element or the React component. */
+/** The transport, from the element or the React component. */
 export type MeetData = {
   transport: Transport;
-  /** The link that books `length`: the page's own, or a same-titled sibling's (links.ts). */
-  slugFor: (length: number) => string;
 };
 
 export const MeetDataContext = createContext<MeetData | null>(null);
@@ -117,7 +115,7 @@ function registrationOf(page: BookingPage): string | undefined {
  * the next press sends the `registration` it has now.
  */
 export function useBook(initial: BookingPage) {
-  const { transport, slugFor } = useMeetData();
+  const { transport } = useMeetData();
   const [isPending, setPending] = useState(false);
   const registration = useRef(registrationOf(initial));
   const mutateAsync = async (
@@ -128,7 +126,7 @@ export function useBook(initial: BookingPage) {
     const body: BookingRequest & ProxyFields = { ...request, ...(sent ? { registration: sent } : {}) };
     setPending(true);
     try {
-      const answer = await transport.book(slugFor(input.length), body);
+      const answer = await transport.book(slug, body);
       if (!answer.ok && answer.code === "changed") {
         void transport.page(slug, initial.firstDay, { fresh: true }).then((read) => {
           if (read.status === "open") registration.current = registrationOf(read.page);

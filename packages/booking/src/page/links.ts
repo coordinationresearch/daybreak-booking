@@ -1,11 +1,12 @@
-import type { BookingLink, ListedLink } from "../types.js";
+import type { ListedLink } from "../types.js";
 
 /**
- * How the page groups a host's links. A host often makes one link per
+ * How the list groups a host's links. A host often makes one link per
  * length, all with the same title: `meet` for 30 minutes beside `15` and
- * `60`, or `coffee` beside `coffee-15` and `coffee-60`. The page folds such
- * siblings into one page with a length choice, and the list shows one card
- * for each title, never the same title twice.
+ * `60`, or `coffee` beside `coffee-15` and `coffee-60`. The list shows one
+ * card for each title, never the same title twice, opening the title's main
+ * link. A link's own page offers only its own lengths, as /meet does, so a
+ * sibling's length is booked from the sibling's own address.
  *
  * Siblings share a title, read without case or extra spaces, and a family:
  * a slug's family is the slug without a trailing `-<number>` (`coffee-15`
@@ -46,23 +47,6 @@ export function siblingsOf(links: ListedLink[], slug: string): ListedLink[] {
   const home = bareHomeOf(group);
   const family = familyOf(slug, home);
   return group.filter((link) => familyOf(link.slug, home) === family);
-}
-
-/** One length the page offers, and the link that books it. */
-export type LengthChoice = { length: number; slug: string };
-
-/**
- * The lengths the page offers for `link`: its own, then each sibling's that
- * it doesn't have, shortest first. A length two siblings share books with
- * the first listed.
- */
-export function lengthChoices(link: Pick<BookingLink, "slug" | "lengths">, siblings: ListedLink[]): LengthChoice[] {
-  const choices = new Map<number, string>();
-  for (const length of link.lengths) choices.set(length, link.slug);
-  for (const sibling of siblings) {
-    for (const length of sibling.lengths) if (!choices.has(length)) choices.set(length, sibling.slug);
-  }
-  return [...choices].map(([length, slug]) => ({ length, slug })).sort((a, b) => a.length - b.length);
 }
 
 /** A card in the list: one title, the link it opens, and every length its siblings offer. */

@@ -5,9 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { callLabel } from "~/lib/booking/page";
 import { cn } from "~/lib/utils";
 
-import { lengthChoices } from "../page/links";
 import type { PageRead, Transport } from "../react/data";
-import type { BookingPage, ListedLink } from "../types";
+import type { BookingPage } from "../types";
 import { Duration } from "./Duration";
 import { MeetBooking } from "./MeetBooking";
 import { MeetDust } from "./MeetDust";
@@ -32,15 +31,12 @@ import { STICKY_HEADER } from "./sticky";
 export function MeetScreen({
   slug,
   transport,
-  siblings,
   initial,
   turnstileSiteKey,
   heading = true,
 }: {
   slug: string;
   transport: Transport;
-  /** The link's same-titled siblings, whose lengths the page offers too (links.ts). */
-  siblings: ListedLink[];
   initial?: BookingPage;
   turnstileSiteKey?: string;
   /** The title and the line under it; on unless false. */
@@ -63,11 +59,7 @@ export function MeetScreen({
 
   const host = useMeetHost();
   const opened = read?.status === "open" ? read.page : null;
-  const choices = useMemo(() => (opened ? lengthChoices(opened.link, siblings) : []), [opened, siblings]);
-  const slugFor = useMemo(() => {
-    const bySize = new Map(choices.map((choice) => [choice.length, choice.slug]));
-    return (length: number) => bySize.get(length) ?? slug;
-  }, [choices, slug]);
+  const data = useMemo(() => ({ transport }), [transport]);
   // The initials stand for the link's host when there's no photo.
   const named = useMemo(() => ({ ...host, name: host.name ?? opened?.link.host }), [host, opened]);
 
@@ -98,14 +90,11 @@ export function MeetScreen({
       </MeetMessage>
     );
 
-  const page: BookingPage = {
-    ...read.page,
-    link: { ...read.page.link, lengths: choices.length ? choices.map((c) => c.length) : read.page.link.lengths },
-  };
+  // The link's own lengths only, as /meet offers its link's.
   return (
     <MeetHostContext.Provider value={named}>
-      <MeetDataContext.Provider value={{ transport, slugFor }}>
-        <MeetOpen slug={slug} page={page} turnstileSiteKey={turnstileSiteKey} heading={heading} key={attempt} />
+      <MeetDataContext.Provider value={data}>
+        <MeetOpen slug={slug} page={read.page} turnstileSiteKey={turnstileSiteKey} heading={heading} key={attempt} />
       </MeetDataContext.Provider>
     </MeetHostContext.Provider>
   );

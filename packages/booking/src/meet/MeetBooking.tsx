@@ -403,7 +403,7 @@ export function MeetBooking({
     const { page } = read.data;
     for (const day of page.days) known.set(day.day, day);
     suggestedAll.push(...page.suggested);
-    // The lengths are the page's, its siblings' among them (links.ts).
+    // The lengths are the ones the page opened with.
     link = { ...page.link, lengths: initial.link.lengths };
   }
   const loaded = [...known.values()].sort((a, b) =>

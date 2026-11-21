@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lengthChoices, linkGroups, siblingsOf } from "../src/page/links.js";
+import { linkGroups, siblingsOf } from "../src/page/links.js";
 import type { ListedLink } from "../src/types.js";
 
 const link = (slug: string, title: string, lengths: number[]): ListedLink => ({ slug, title, lengths });
@@ -40,31 +40,6 @@ describe("a link's siblings", () => {
 
   it("are none for a link the list doesn't have", () => {
     expect(siblingsOf(links, "unlisted")).toEqual([]);
-  });
-});
-
-describe("the lengths a page offers", () => {
-  it("are the link's own, then each sibling's, shortest first", () => {
-    expect(lengthChoices({ slug: "chat", lengths: [30] }, siblingsOf(links, "chat"))).toEqual([
-      { length: 15, slug: "15" },
-      { length: 30, slug: "chat" },
-      { length: 60, slug: "60" },
-    ]);
-  });
-
-  it("book a length the link has itself with the link", () => {
-    expect(lengthChoices({ slug: "15", lengths: [15, 30] }, siblingsOf(links, "15"))).toEqual([
-      { length: 15, slug: "15" },
-      { length: 30, slug: "15" },
-      { length: 60, slug: "60" },
-    ]);
-  });
-
-  it("are the link's own without siblings", () => {
-    expect(lengthChoices({ slug: "office-hours", lengths: [20, 40] }, [])).toEqual([
-      { length: 20, slug: "office-hours" },
-      { length: 40, slug: "office-hours" },
-    ]);
   });
 });
 

@@ -44,9 +44,9 @@ describe("<daybreak-booking>", () => {
     element.setAttribute("slug", "meet");
     document.body.appendChild(element);
     await shadowText(element, "Meet with Sam");
-    // The page, and the list beside it for the link's other lengths.
+    // The page alone: it offers the link's own lengths, as /meet does, so it never reads the list.
     expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam/meet?days=28");
-    expect(fetchSpy.mock.calls.map((call) => call[0])).toContain("/api/u/sam");
+    expect(fetchSpy.mock.calls.map((call) => call[0])).not.toContain("/api/u/sam");
     expect(element.shadowRoot!.textContent).toContain("Google Meet");
     expect(element.shadowRoot!.querySelector("form")).toBeTruthy();
     // The page's own styles stay out; the element brings its own.

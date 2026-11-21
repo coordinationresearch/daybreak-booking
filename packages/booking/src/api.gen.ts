@@ -35,6 +35,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/book/v1/photo.jpg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The host's photo, a square JPEG, while they show it on their pages. */
+        get: operations["photo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/book/v1/{slug}": {
         parameters: {
             query?: never;
@@ -106,6 +123,8 @@ export interface components {
             }[];
             /** @description Up to 3 starts a week best for the host, at the default length. */
             suggested: number[];
+            /** @description The hex SHA-256 of the host's photo, which `GET /book/v1/photo.jpg` serves, while they show one. Absent otherwise. */
+            photoHash?: string;
         };
         BookingRequest: {
             /** @description Milliseconds since epoch, on the quarter hour, inside one open stretch. */
@@ -202,6 +221,52 @@ export interface operations {
                         error: {
                             /** @constant */
                             code: "unauthenticated";
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    photo: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag a cache holds, the photo's hash in quotes. */
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The photo. Its `ETag` is its hex SHA-256 in quotes, the page's `photoHash`. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description The photo is the one `If-None-Match` names. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The host shows no photo, has none, or has paused bookings. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            /** @constant */
+                            code: "not_found";
                             message: string;
                         };
                     };

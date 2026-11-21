@@ -274,6 +274,24 @@
           }
         }
       }
+    },
+    {
+      "name": "no photo",
+      "given": "a link",
+      "unversioned": false,
+      "request": {
+        "method": "GET",
+        "path": "/book/v1/photo.jpg"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "code": "not_found",
+            "message": "This host shows no photo"
+          }
+        }
+      }
     }
   ]
 }

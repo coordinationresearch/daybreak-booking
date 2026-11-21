@@ -111,7 +111,7 @@ export default function Book() {
 | Prop | |
 | --- | --- |
 | `api` | The proxy's address. Required. |
-| `slug` | The link. Without it, the page lists the links, one card per title. Links with the same title in one family (`meet` beside `15` and `60`, or `coffee` beside `coffee-15`) are one page's lengths: the page reads `GET <api>` to find them, offers each length, and books the one picked with its own link. |
+| `slug` | The link. Without it, the page lists the links, one card per title: links with the same title in one family (`meet` beside `15` and `60`, or `coffee` beside `coffee-15`) are one card, which opens the title's main link and lists every length the family offers. A link's own page offers only that link's lengths, as /meet does; each sibling keeps its own page. |
 | `initial` | The link's first four weeks, read on the server with `createClient(...).page(slug, { days: 28 })`, so the page draws without waiting. |
 | `turnstileSiteKey` | Shows Cloudflare's widget and sends its token. |
 | `heading` | The link's title, and its length and call ("30m · Google Meet"). On unless `false`. |

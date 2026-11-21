@@ -35,7 +35,8 @@ async function expectNoDeploymentAddress(response: Response) {
 }
 
 describe("the proxy against Daybreak's fixtures", () => {
-  const routed = CASES.filter((c) => !c.request.path.startsWith("/book/v1/key"));
+  // The key check and the host's photo aren't the page's reads or bookings, so the handler passes neither on.
+  const routed = CASES.filter((c) => !["/book/v1/key", "/book/v1/photo.jpg"].includes(c.request.path));
   for (const c of routed) {
     it(`passes ${c.name} through`, async () => {
       const deployment = fakeDeployment();

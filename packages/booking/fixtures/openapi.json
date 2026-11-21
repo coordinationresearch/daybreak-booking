@@ -3,7 +3,7 @@
   "info": {
     "title": "Daybreak Booking API",
     "version": "1",
-    "description": "Read a Daybreak user's open time and book it, from a server or an agent. No token is needed. `/book/v1` and `/book/v1/{slug}` also answer without `/v1`, as they did before v1, and always will; `/book/v1/key` and `/book/v1/openapi.json` have no such path. Errors answer `{ \"error\": { \"code\", \"message\" } }`. There's no CORS: call it from a server, never a browser."
+    "description": "Read a Daybreak user's open time and book it, from a server or an agent. No token is needed. `/book/v1` and `/book/v1/{slug}` also answer without `/v1`, as they did before v1, and always will; `/book/v1/key`, `/book/v1/photo.jpg`, and `/book/v1/openapi.json` have no such path. Errors answer `{ \"error\": { \"code\", \"message\" } }`. There's no CORS: call it from a server, never a browser."
   },
   "servers": [
     {
@@ -82,6 +82,76 @@
                       "properties": {
                         "code": {
                           "const": "unauthenticated"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/book/v1/photo.jpg": {
+      "get": {
+        "operationId": "photo",
+        "summary": "The host's photo, a square JPEG, while they show it on their pages.",
+        "parameters": [
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "description": "The ETag a cache holds, the photo's hash in quotes.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The photo. Its `ETag` is its hex SHA-256 in quotes, the page's `photoHash`.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "image/jpeg"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The photo is the one `If-None-Match` names."
+          },
+          "404": {
+            "description": "The host shows no photo, has none, or has paused bookings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "const": "not_found"
                         },
                         "message": {
                           "type": "string"
@@ -642,6 +712,10 @@
               "description": "Milliseconds since epoch."
             },
             "description": "Up to 3 starts a week best for the host, at the default length."
+          },
+          "photoHash": {
+            "type": "string",
+            "description": "The hex SHA-256 of the host's photo, which `GET /book/v1/photo.jpg` serves, while they show one. Absent otherwise."
           }
         }
       },

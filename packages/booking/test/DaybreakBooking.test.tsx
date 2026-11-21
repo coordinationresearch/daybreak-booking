@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // What the component adds around /meet's page (MeetBooking.test.tsx tests
 // the page itself): the proxy's routes in place of /meet's tRPC calls, a
-// same-titled link's lengths, `registration`, a closed link, and the list.
+// link's own lengths alone, `registration`, a closed link, and the list.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -119,10 +119,10 @@ describe("booking a link through its proxy", () => {
     await waitFor(() => expect(proxy.gets).toContain("/api/booking/meet?from=2026-11-10&days=028"));
   });
 
-  it("books a length its same-titled link offers with that link", async () => {
+  it("offers only the link's own lengths, as /meet does, never a same-titled link's", async () => {
     const fetch = vi.fn(async (input: string | URL | Request, init: RequestInit = {}) => {
       const url = String(input);
-      if (init.method === "POST") return json(200, { booked: { start: at(11), end: at(12), title: "Ana 🤝 Sam" } });
+      if (init.method === "POST") return json(200, BOOKED);
       if (!url.includes("?"))
         return json(200, {
           links: [
@@ -133,12 +133,15 @@ describe("booking a link through its proxy", () => {
       return json(200, { ...PAGE, link: { ...PAGE.link, lengths: [30] } });
     });
     render(<DaybreakBooking api="/api/booking" slug="meet" fetch={fetch as unknown as typeof globalThis.fetch} />);
-    fireEvent.click(await screen.findByRole("button", { name: "60 minutes" }));
+    await screen.findByRole("heading", { name: "Meet with Sam" });
+    expect(screen.queryByRole("button", { name: "60 minutes" })).toBeNull();
+    // The page never reads the list, which only grouped a link's siblings.
+    expect(fetch.mock.calls.map(([input]) => String(input))).not.toContain("/api/booking");
     const user = await fillForm();
-    await user.click(await screen.findByRole("button", { name: "Book 60 minutes" }));
+    await user.click(book());
     await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
     const post = fetch.mock.calls.find(([, init]) => init?.method === "POST")!;
-    expect(String(post[0])).toBe("/api/booking/60");
+    expect(String(post[0])).toBe("/api/booking/meet");
   });
 
   it("sends back the `registration` the site's proxy put on the page, and the new one after a `changed`", async () => {

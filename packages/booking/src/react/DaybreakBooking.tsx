@@ -5,8 +5,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MeetScreen } from "../meet/MeetScreen.js";
 import { MeetHostContext, useResolvedTheme } from "../meet/host.js";
 import { lengthLabel } from "../page/page.js";
-import { type LinkGroup, linkGroups, siblingsOf } from "../page/links.js";
-import type { BookingPage, ListedLink } from "../types.js";
+import { type LinkGroup, linkGroups } from "../page/links.js";
+import type { BookingPage } from "../types.js";
 import { type LinksRead, type Transport, createTransport } from "./data.js";
 import { ArrowClockwiseIcon, CaretRightBoldIcon } from "./icons.js";
 import { BOOKING_CSS } from "./styles.js";
@@ -141,19 +141,6 @@ function LinkPage({
   photo: string | undefined;
   home: { href: string; label: string } | undefined;
 }) {
-  const [siblings, setSiblings] = useState<ListedLink[]>([]);
-
-  // The list says which links are this one's other lengths. Without it, the page offers the link's own.
-  useEffect(() => {
-    let cancelled = false;
-    void transport.links().then((list) => {
-      if (!cancelled && list.status === "open") setSiblings(siblingsOf(list.links, slug));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transport, slug]);
-
   const host = useMemo(
     () => ({ theme, ...(photo ? { photo } : {}), ...(home ? { home } : {}) }),
     [theme, photo, home],
@@ -164,7 +151,6 @@ function LinkPage({
       <MeetScreen
         slug={slug}
         transport={transport}
-        siblings={siblings}
         heading={heading}
         {...(initial ? { initial } : {})}
         {...(turnstileSiteKey ? { turnstileSiteKey } : {})}
