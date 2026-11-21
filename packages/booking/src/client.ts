@@ -15,8 +15,8 @@ import {
 export type ClientOptions = {
   /** The deployment's HTTP address, as `https://your-deployment.convex.site`. */
   url: string;
-  /** A booking key from Settings › Booking › Website keys. Without one, every call shares the deployment's direct limit. */
-  key?: string;
+  /** A booking key from Settings › Booking › Website keys. Required: the client throws without one. */
+  key: string;
   /** For tests, or a runtime whose global fetch needs wrapping. */
   fetch?: typeof fetch;
   /** How long a call waits for the deployment, 10 seconds unless given. */
@@ -57,7 +57,9 @@ export type BookingClient = {
 };
 
 export function assertServer(what: string): void {
-  if (typeof window !== "undefined") {
+  const inPage = typeof window !== "undefined" && typeof document !== "undefined";
+  const inWorker = typeof (globalThis as { importScripts?: unknown }).importScripts === "function";
+  if (inPage || inWorker) {
     throw new Error(
       `${what} holds a booking key and runs only on a server. In a browser, use @daybreak/booking/react or @daybreak/booking/element against your own proxy.`,
     );
@@ -66,14 +68,18 @@ export function assertServer(what: string): void {
 
 export function createClient(options: ClientOptions): BookingClient {
   assertServer("createClient");
+  if (typeof options.key !== "string" || options.key.trim() === "") {
+    throw new Error("createClient needs a booking key. Set DAYBREAK_BOOKING_KEY to one from Settings › Booking › Website keys.");
+  }
+  const key = options.key;
   const base = normalizeUrl(options.url);
   const send = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const timeoutMs = options.timeoutMs ?? 10_000;
 
   const raw: BookingClient["raw"] = async (method, path, call = {}) => {
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (options.key) headers["X-Daybreak-Booking-Key"] = options.key;
-    if (options.key && call.client) headers["X-Daybreak-Booking-Client"] = call.client;
+    headers["X-Daybreak-Booking-Key"] = key;
+    if (call.client) headers["X-Daybreak-Booking-Client"] = call.client;
     if (call.body !== undefined) headers["Content-Type"] = "application/json";
     let response: Response;
     try {
@@ -81,6 +87,8 @@ export function createClient(options: ClientOptions): BookingClient {
         method,
         headers,
         ...(call.body !== undefined ? { body: JSON.stringify(call.body) } : {}),
+        // The key rides in a header, so a redirect must never carry it to another host.
+        redirect: "error",
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
@@ -117,7 +125,6 @@ export function createClient(options: ClientOptions): BookingClient {
       return answer.booked;
     },
     checkKey: async () => {
-      if (!options.key) return false;
       const { status, body } = await raw("GET", "/book/v1/key");
       if (status === 200) return true;
       if (status === 401) return false;

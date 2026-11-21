@@ -20,7 +20,7 @@ export const CASES: Case[] = JSON.parse(
 export const DEPLOYMENT = "https://your-deployment.convex.site";
 export const KEY = "dbk_example-booking-key";
 
-export type Call = { url: string; method: string; headers: Headers; body: unknown };
+export type Call = { url: string; method: string; headers: Headers; body: unknown; init: RequestInit };
 
 /** A fetch that answers `cases` by method, path, and body, and records each call. Anything else throws, as a dropped connection does. */
 export function fakeDeployment(cases: Case[] = CASES, extra?: (call: Call) => Response | undefined) {
@@ -28,7 +28,7 @@ export function fakeDeployment(cases: Case[] = CASES, extra?: (call: Call) => Re
   const fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = String(input);
     const body = typeof init.body === "string" ? JSON.parse(init.body) : init.body;
-    const call: Call = { url, method: init.method ?? "GET", headers: new Headers(init.headers), body };
+    const call: Call = { url, method: init.method ?? "GET", headers: new Headers(init.headers), body, init };
     calls.push(call);
     const answered = extra?.(call);
     if (answered) return answered;

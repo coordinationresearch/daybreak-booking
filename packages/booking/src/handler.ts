@@ -12,20 +12,33 @@ import { DAY_PATTERN, SLUG_PATTERN } from "./types.js";
  * Routes, under `basePath` (`/api/booking` unless given):
  * - `GET  <basePath>` answers `{ links }`, the listed links.
  * - `GET  <basePath>/<slug>?from=YYYY-MM-DD&days=7` answers the link's page.
- * - `POST <basePath>/<slug>` takes the booking, plus `turnstileToken` when
- *   the handler has a Turnstile secret, and answers `{ booked }`.
+ * - `POST <basePath>/<slug>` takes the booking as `application/json`, plus
+ *   `turnstileToken` when the handler has a Turnstile secret, and answers
+ *   `{ booked }`. It drops `turnstileToken` and `registration` (which the
+ *   Daybreak site's proxy reads and this one doesn't) before forwarding.
  * Refusals answer `{ error: { code, message } }`: the deployment's own, or
- * 403 `forbidden` for a failed person check and 502 `unavailable` when the
- * deployment didn't answer.
+ * 403 `forbidden` for a failed person check, 415 `invalid` for a body that
+ * isn't JSON, and 502 `unavailable` when the deployment didn't answer.
  */
 
 export type HandlerOptions = {
   /** The deployment's HTTP address, as `https://your-deployment.convex.site`. */
   url: string;
-  /** A booking key from Settings › Booking › Website keys. */
+  /** A booking key from Settings › Booking › Website keys. Required: the handler throws without one. */
   key: string;
-  /** Cloudflare Turnstile's secret key. With it, a booking needs a `turnstileToken` that Cloudflare accepts. */
+  /**
+   * Cloudflare Turnstile's secret key. With it, a booking needs a `turnstileToken` that Cloudflare accepts.
+   * Leave the option out to book without a person check; passing it empty throws, so a missing
+   * environment variable doesn't turn the check off without a word.
+   */
   turnstileSecret?: string;
+  /**
+   * The visitor's address, which the deployment's per-sender limit counts and Turnstile's check reads.
+   * Unless given, `defaultClientAddress`: `cf-connecting-ip` on Cloudflare Workers, `x-real-ip` on
+   * Vercel, and nothing elsewhere, since anywhere else a visitor can set those headers themselves.
+   * Return undefined when you can't tell; every visitor then shares the key's limit.
+   */
+  clientAddress?: (request: Request) => string | undefined;
   /** Where the handler is mounted, `/api/booking` unless given. */
   basePath?: string;
   /** How long a shared cache may keep a read, in seconds, 60 unless given. 0 sends `no-store`. */
@@ -41,8 +54,17 @@ const MOST_BODY = 16_384;
 
 export function bookingHandler(options: HandlerOptions): (request: Request) => Promise<Response> {
   assertServer("bookingHandler");
+  if (typeof options.key !== "string" || options.key.trim() === "") {
+    throw new Error("bookingHandler needs a booking key. Set DAYBREAK_BOOKING_KEY to one from Settings › Booking › Website keys.");
+  }
+  if ("turnstileSecret" in options && (typeof options.turnstileSecret !== "string" || options.turnstileSecret.trim() === "")) {
+    throw new Error(
+      "bookingHandler's turnstileSecret is empty. Set TURNSTILE_SECRET_KEY, or leave the option out to book without a person check.",
+    );
+  }
   const client = createClient({ url: options.url, key: options.key, ...(options.fetch ? { fetch: options.fetch } : {}) });
   const send = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  const addressOf = options.clientAddress ?? defaultClientAddress;
   const base = `/${(options.basePath ?? "/api/booking").replace(/^\/+|\/+$/g, "")}`.replace(/^\/$/, "");
   const cacheSeconds = options.cacheSeconds ?? 60;
   const readCache =
@@ -54,7 +76,7 @@ export function bookingHandler(options: HandlerOptions): (request: Request) => P
     if (path !== base && !path.startsWith(`${base}/`)) return refuse(404, "not_found", "No such route.");
     const rest = path.slice(base.length + 1);
     if (rest.includes("/")) return refuse(404, "not_found", "No such route.");
-    const visitor = clientAddress(request.headers);
+    const visitor = cleanAddress(addressOf(request));
 
     if (rest === "") {
       if (request.method !== "GET") return refuse(405, "invalid", "Use GET.", { Allow: "GET" });
@@ -96,8 +118,14 @@ export function bookingHandler(options: HandlerOptions): (request: Request) => P
 
     if (request.method !== "POST") return refuse(405, "invalid", "Use GET or POST.", { Allow: "GET, POST" });
 
-    const text = await request.text().catch(() => null);
-    if (text === null || text.length > MOST_BODY) return refuse(400, "invalid", "The booking is too large.");
+    // A form or text/plain POST is one a page on another site can send without a preflight.
+    const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+    if (type !== "application/json") return refuse(415, "invalid", "Send the booking as application/json.");
+    const length = request.headers.get("content-length");
+    if (length !== null && !(Number(length) <= MOST_BODY)) return refuse(400, "invalid", "The booking is too large.");
+    const text = await readCapped(request, MOST_BODY);
+    if (text === "too_large") return refuse(400, "invalid", "The booking is too large.");
+    if (text === null) return refuse(400, "invalid", "Send the booking as JSON.");
     let body: unknown;
     try {
       body = JSON.parse(text);
@@ -105,7 +133,7 @@ export function bookingHandler(options: HandlerOptions): (request: Request) => P
       return refuse(400, "invalid", "Send the booking as JSON.");
     }
     if (!isObject(body) || Array.isArray(body)) return refuse(400, "invalid", "Send the booking as a JSON object.");
-    const { turnstileToken, ...booking } = body;
+    const { turnstileToken, registration: _registration, ...booking } = body;
 
     if (options.turnstileSecret) {
       const check = await verifyTurnstile(send, options.turnstileSecret, turnstileToken, visitor);
@@ -127,16 +155,64 @@ export function bookingHandler(options: HandlerOptions): (request: Request) => P
 }
 
 /**
- * The visitor's address: `x-real-ip` (Vercel sets it and overwrites any the
- * visitor sends), then `cf-connecting-ip` (Cloudflare), then the first entry
- * of `x-forwarded-for`.
+ * The visitor's address where the platform vouches for it: `cf-connecting-ip`
+ * on Cloudflare Workers and `x-real-ip` on Vercel, each of which the platform
+ * sets itself, overwriting any the visitor sent. Anywhere else nothing, since
+ * a visitor who sets those headers, or `x-forwarded-for`, would look like a
+ * new sender on every request. Pass `clientAddress` to read your own proxy's.
  */
-export function clientAddress(headers: Headers): string | undefined {
-  const first = (value: string | null) => {
-    const trimmed = value?.split(",")[0]?.trim();
-    return trimmed ? trimmed : undefined;
-  };
-  return first(headers.get("x-real-ip")) ?? first(headers.get("cf-connecting-ip")) ?? first(headers.get("x-forwarded-for"));
+export function defaultClientAddress(request: Request): string | undefined {
+  if (onCloudflareWorkers()) return request.headers.get("cf-connecting-ip") ?? undefined;
+  if (onVercel()) return request.headers.get("x-real-ip") ?? undefined;
+  return undefined;
+}
+
+function onCloudflareWorkers(): boolean {
+  return typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+}
+
+function onVercel(): boolean {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return Boolean(env?.VERCEL);
+}
+
+/** An address as one header value: trimmed, at most 64 characters, or undefined. */
+function cleanAddress(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length <= 64 && !/[\s,]/.test(trimmed) ? trimmed : undefined;
+}
+
+/** The body as text, read no further than `cap` bytes: `too_large` past it, null when it can't be read. */
+async function readCapped(request: Request, cap: number): Promise<string | "too_large" | null> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > cap) {
+        await reader.cancel().catch(() => undefined);
+        return "too_large";
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
 }
 
 async function verifyTurnstile(
@@ -152,6 +228,7 @@ async function verifyTurnstile(
     const response = await send(TURNSTILE_VERIFY_URL, {
       method: "POST",
       body: form,
+      redirect: "error",
       signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) return "unavailable";
