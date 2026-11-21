@@ -11,7 +11,6 @@ export default defineConfig({
       { find: /^~\/lib\/utils$/, replacement: at("./src/meet/ui/utils") },
       { find: /^~\/lib\/useTapFirstCapability$/, replacement: at("./src/meet/ui/useTapFirstCapability") },
       { find: /^~\/components\/ui\/(.*)$/, replacement: at("./src/meet/ui/$1") },
-      { find: /^~\/components\/daylight\/(.*)$/, replacement: at("./src/meet/daylight/$1") },
     ],
   },
   test: {

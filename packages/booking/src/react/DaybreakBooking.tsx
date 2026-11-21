@@ -36,7 +36,7 @@ export type DaybreakBookingProps = {
   theme?: "auto" | "light" | "dark";
   /** The host's photo, square, drawn in the ring of dust. Without it, the host's initials stand in its place. */
   photo?: string;
-  /** The way back to the host's site, on the closed page and the ticket's back, as `{ href: "/", label: "example.com" }`. */
+  /** The way back to the host's site from the closed page, as `{ href: "/", label: "example.com" }`. The ticket's back is Daybreak's word, linked to Daybreak's site, whatever this says. */
   home?: { href: string; label: string };
   /** Where each listed link goes. Without it, picking a link opens it in place. */
   linkHref?: (slug: string) => string;

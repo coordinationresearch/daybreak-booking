@@ -117,7 +117,7 @@ export default function Book() {
 | `heading` | The link's title, and its length and call ("30m · Google Meet"). On unless `false`. |
 | `theme` | `"auto"` (the default, the visitor's setting), `"light"`, or `"dark"`. |
 | `photo` | The host's photo, a URL. Without it, the page draws the host's initials on the accent's disc where the photo goes. |
-| `home` | `{ href, label }`: the link on the back of the confirmation's ticket, beside the host's photo (as "example.com ↗"). Without it, the back shows the photo alone. |
+| `home` | `{ href, label }`: the way back to your site from the page that says a link is closed or the calendar didn't answer, a button reading `label`. The back of the confirmation's ticket doesn't use it: it's always Daybreak's sunrise and word, linked to Daybreak's site. |
 | `linkHref` | `(slug) => href` for the list of links. Without it, a link opens in place. |
 | `injectStyles` | The component adds its stylesheet to the document. Pass `false` and import `@coordination/booking/styles.css` yourself to avoid a flash on server-rendered pages. |
 
@@ -130,7 +130,7 @@ React, framer-motion, and the stylesheet are bundled inside, so it works on any 
 <daybreak-booking api="/api/booking" slug="meet"></daybreak-booking>
 ```
 
-Or `dist/element.global.js` with a plain `<script>`, or `import "@coordination/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, `photo`, `home-href` and `home-label` (the link on the back of the confirmation's ticket), and `link-href` with `{slug}` in it, as `/book/{slug}`.
+Or `dist/element.global.js` with a plain `<script>`, or `import "@coordination/booking/element"` in a bundler. Attributes: `api`, `slug`, `turnstile-site-key`, `theme` (`light` or `dark`), `heading="off"`, `photo`, `home-href` and `home-label` (the way back to your site when a link is closed), and `link-href` with `{slug}` in it, as `/book/{slug}`.
 
 It draws in a shadow root, so your page's styles don't reach in. Cloudflare's widget draws in the light DOM and is slotted in. One booking page per document: it's drawn for the whole screen, with fixed layers. Importing the module during server rendering is safe: where `HTMLElement` doesn't exist, it registers nothing.
 
@@ -140,7 +140,7 @@ Daybreak's own `daybreak.coordination.sh/api/u/<name>` answers the same routes, 
 
 ### Styling
 
-The page is Daybreak's own booking page, the same markup, styles, and motion: the photo in its ring of dust, the title's entrance, the week grid with open time washed blue and a star on the times best for the host, the card (a sheet on a phone), and the confirmation's ticket. It's drawn for the whole screen and paints its own ground inside its box, `#f5f5f7` in light and `#0e0e0f` in dark; give your page's `<html>` and `<body>` the same, with no margin, so overscroll and the space past the page match. While it's shown, it sets your page's `<meta name="theme-color">` tags to the same, and gives them back when it goes. Its look isn't configurable.
+The page is Daybreak's own booking page, the same markup, styles, and motion: the photo in its ring of dust, the title's entrance, the week grid with open time washed blue and a star on the times best for the host, the card (a sheet on a phone), and the confirmation's ticket, whose back is Daybreak's sunrise and word, linked to Daybreak's site. It's drawn for the whole screen and paints its own ground inside its box, `#f5f5f7` in light and `#0e0e0f` in dark; give your page's `<html>` and `<body>` the same, with no margin, so overscroll and the space past the page match. While it's shown, it sets your page's `<meta name="theme-color">` tags to the same, and gives them back when it goes. Its look isn't configurable.
 
 ## The client: `createClient`
 

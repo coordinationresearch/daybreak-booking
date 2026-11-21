@@ -9,18 +9,18 @@ import {
   MapPinIcon,
   VideoCameraIcon,
 } from "@phosphor-icons/react";
-import { useId, useLayoutEffect, useRef } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import { callLabel } from "~/lib/booking/page";
 import { ordinalSuffix } from "~/lib/booking/zones";
 import { cn } from "~/lib/utils";
 
-import { useMeetHost } from "../host";
 import { Portrait } from "../Portrait";
 
-import { BackSkyline, type BackSkylineHandle } from "./BackSkyline";
 import { type VariantProps, dateParts } from "./Confirmation";
 import c from "./confirmed.module.css";
+import { DAYBREAK_SITE } from "./daybreak";
+import { HORIZON, drawDawn, sunrise } from "./dawn";
 import {
   GLINTS,
   type Point,
@@ -50,8 +50,9 @@ import {
  * as it does. A glare slides over it, and its blue foil, printed with a
  * fine security pattern, is full of dust that glints as the light
  * catches it. Drag it sideways, or tap it, and it flips over: on its back
- * is San Francisco at night under a sky of the same dust, and a tap there
- * goes to the rest of the site.
+ * is Daybreak's first light (dawn.ts), the Earth's curve under a sky of the
+ * same dust with the sun coming up over it, and Daybreak's word, which goes
+ * to Daybreak's site. A tap on the sunrise brings the sun up again.
  *
  * The ring is truly round it: tilted with the ticket, passing behind it
  * and in front, spinning up and swelling as the pointer comes near.
@@ -72,6 +73,9 @@ const PUFF = 680;
 const RING = 420;
 const FOIL = 340;
 const STARS = 230;
+/** How far the back's sky canvases overhang it, for the tilt's slide
+ * (confirmed.module.css's .backSky). */
+const SKY_PAD = 30;
 /** The ticket's own perspective, as its CSS transform has it. */
 const PERSPECTIVE = 900;
 /** The card's thickness, in pixels, and the slices that make its edge:
@@ -220,7 +224,6 @@ export function ConfirmTicket({
   bookerZone,
   from,
 }: VariantProps) {
-  const { home } = useMeetHost();
   const section = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const ticket = useRef<HTMLDivElement>(null);
@@ -228,7 +231,8 @@ export function ConfirmTicket({
   const stamp = useRef<HTMLDivElement>(null);
   const foil = useRef<HTMLCanvasElement>(null);
   const sky = useRef<HTMLCanvasElement>(null);
-  const city = useRef<BackSkylineHandle>(null);
+  const dawn = useRef<HTMLCanvasElement>(null);
+  const [sun] = useState(sunrise);
   const backdrop = useRef<HTMLCanvasElement>(null);
   const perf = useRef<HTMLDivElement>(null);
   const again = useRef<HTMLButtonElement>(null);
@@ -295,6 +299,7 @@ export function ConfirmTicket({
     const line = slotLine.current;
     const glitter = foil.current;
     const night = sky.current;
+    const first = dawn.current;
     const under = backdrop.current;
     if (
       !canAnimate() ||
@@ -304,14 +309,16 @@ export function ConfirmTicket({
       !line ||
       !glitter ||
       !night ||
+      !first ||
       !under
     )
       return;
     const fctx = glitter.getContext("2d");
     const sctx = night.getContext("2d");
+    const dctx = first.getContext("2d");
     const bctx = under.getContext("2d");
     const layer = overlay();
-    if (!fctx || !sctx || !bctx || !layer) return;
+    if (!fctx || !sctx || !dctx || !bctx || !layer) return;
     const { ctx } = layer;
     const { accent, dark } = palette();
     const { sprites: tints, pick } = blues(accent, dark);
@@ -336,6 +343,8 @@ export function ConfirmTicket({
       skyH = night.offsetHeight;
       night.width = skyW * dpr;
       night.height = skyH * dpr;
+      first.width = skyW * dpr;
+      first.height = skyH * dpr;
       underW = under.offsetWidth;
       underH = under.offsetHeight;
       under.width = underW * dpr;
@@ -378,7 +387,7 @@ export function ConfirmTicket({
         flare: between(1.5, 14),
       };
     });
-    // Now and then a shooting star, the daylight sky's own: a short bright
+    // Now and then a shooting star, /meet's daylight sky's own: a short bright
     // streak, steeply down across the top of the back.
     let meteor: {
       x: number;
@@ -700,6 +709,10 @@ export function ConfirmTicket({
       }
       sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       sctx.clearRect(0, 0, skyW, skyH);
+      // The sun comes up the first time the back shows.
+      if (side === "back" && !sun.started()) sun.rise(now);
+      const up = sun.level(now);
+      const horizon = SKY_PAD + (skyH - SKY_PAD * 2) * HORIZON;
       // Depth: the tilt slides near stars farther than far ones (the
       // canvas overhangs the back to have room), and the sky drifts.
       const slideX = -(yaw / 16);
@@ -717,12 +730,18 @@ export function ConfirmTicket({
             : 0;
         const twinkle =
           1 - g.swing * (0.5 + 0.5 * Math.sin(t * g.rate + g.phase));
-        const a = Math.min(1, g.glow * twinkle + glint * 0.5 + flaring * 0.6);
-        if (a < 0.02) continue;
         const x =
           ((((g.x + t * 0.0035 * (0.15 + g.depth)) % 1) + 1) % 1) * skyW +
           slideX * (4 + 24 * g.depth);
         const y = g.y * skyH + slideY * (3 + 15 * g.depth);
+        // Stars thin out into the dawn over the horizon, and dim a little
+        // as the sun comes up.
+        const above = Math.max(0, Math.min(1, (horizon - y) / (skyH * 0.22)));
+        const a =
+          Math.min(1, g.glow * twinkle + glint * 0.5 + flaring * 0.6) *
+          above *
+          (1 - 0.2 * Math.min(1, up));
+        if (a < 0.02) continue;
         const s = g.size * (1 + glint * 0.3 + flaring * 0.5);
         sctx.globalAlpha = a;
         sctx.drawImage(
@@ -783,6 +802,11 @@ export function ConfirmTicket({
           sctx.globalAlpha = a;
           sctx.drawImage(glints[0]!, hx - 4, hy - 4, 8, 8);
         }
+      }
+
+      if (side === "back") {
+        dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawDawn(dctx, skyW, skyH, SKY_PAD, up, t, slideX, slideY);
       }
 
       layer.clear();
@@ -1029,7 +1053,7 @@ export function ConfirmTicket({
       pointer.stop();
       layer.remove();
     };
-  }, [from]);
+  }, [from, sun]);
 
   /** iOS asks before it shares the phone's tilt, and only from a tap. */
   const askTilt = () => {
@@ -1298,12 +1322,18 @@ export function ConfirmTicket({
             <div className={cn(c.face, c.ticketBack)}>
               <div className={cn(c.faceInner, c.backInner)}>
                 <canvas ref={sky} aria-hidden className={c.backSky} />
-                <BackSkyline ref={city} />
-                {/* The top of the back goes to the site; the rest is the
-                    bridge's, and fires it. */}
+                <canvas ref={dawn} aria-hidden className={c.backSky} />
+                {/* The top of the back is Daybreak's word, and goes to
+                    Daybreak's site; the rest is the sunrise's, and brings
+                    the sun up again. */}
+                {/* A new tab, so the booker keeps the ticket, and so an
+                    embed's frame never tries to show Daybreak's site. */}
                 <a
-                  href={home?.href}
+                  href={DAYBREAK_SITE}
+                  target="_blank"
+                  rel="noopener"
                   draggable={false}
+                  aria-label="Made with Daybreak"
                   className={c.backLink}
                   onFocus={() => {
                     if (showingFront()) turnTo(flip.current.target + 180);
@@ -1314,22 +1344,20 @@ export function ConfirmTicket({
                     dragged.current = false;
                   }}
                 >
-                  <span className={c.backTitle}>
-                    <Portrait size={28} className={c.backFace} />
-                    {home?.label}
-                    {home && (
-                      <ArrowUpRightIcon
-                        aria-hidden
-                        weight="bold"
-                        className={c.backArrow}
-                      />
-                    )}
+                  <span className={c.backWord}>
+                    <span className={c.backType}>daybreak</span>
+                    <span aria-hidden className={c.backCursor} />
+                    <ArrowUpRightIcon
+                      aria-hidden
+                      weight="bold"
+                      className={c.backArrow}
+                    />
                   </span>
                 </a>
                 <button
                   type="button"
-                  aria-label="Fireworks over the Golden Gate"
-                  className={c.backFire}
+                  aria-label="Watch the sun rise"
+                  className={c.backRise}
                   onFocus={() => {
                     if (showingFront()) turnTo(flip.current.target + 180);
                   }}
@@ -1338,8 +1366,9 @@ export function ConfirmTicket({
                       dragged.current = false;
                       return;
                     }
+                    if (!canAnimate()) return;
                     haptic();
-                    city.current?.fire();
+                    sun.rise(performance.now());
                   }}
                 />
                 <div className={c.ticketGlare} aria-hidden />

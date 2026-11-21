@@ -2,7 +2,7 @@
 // What the component adds around /meet's page (MeetBooking.test.tsx tests
 // the page itself): the proxy's routes in place of /meet's tRPC calls, a
 // link's own lengths alone, `registration`, a closed link, and the list.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -163,6 +163,37 @@ describe("booking a link through its proxy", () => {
     await user.click(book());
     await waitFor(() => expect(proxy.posts).toHaveLength(2));
     expect(proxy.posts[1]!.body.registration).toBe("new-registration");
+  });
+
+  it("puts Daybreak's word on the ticket's back, linked to Daybreak's site, and never the site's address", async () => {
+    proxy.answers.push(json(200, BOOKED));
+    render(
+      <DaybreakBooking
+        api="/api/booking"
+        slug="meet"
+        initial={PAGE}
+        home={{ href: "/u/sam", label: "example.com/u/sam" }}
+        fetch={proxy.fetch}
+      />,
+    );
+    await screen.findByRole("heading", { name: "Meet with Sam" });
+    const user = await fillForm();
+    await user.click(book());
+    const heading = await screen.findByRole("heading", { name: "You're meeting Sam" });
+    const ticket = heading.closest("[data-ticket]")!;
+    const back = within(ticket as HTMLElement).getByRole("link", { name: "Made with Daybreak" });
+    expect(back.getAttribute("href")).toBe("https://daybreak.coordination.sh/");
+    expect(back.getAttribute("target")).toBe("_blank");
+    expect(back.textContent).toBe("daybreak");
+    expect(ticket.textContent).not.toContain("example.com/u/sam");
+    expect(within(ticket as HTMLElement).getByRole("button", { name: "Watch the sun rise" })).toBeTruthy();
+  });
+
+  it("keeps the site's own way out on a closed link's page", async () => {
+    const fetch = (async () =>
+      json(404, { error: { code: "not_found", message: "This booking page isn't taking bookings." } })) as typeof globalThis.fetch;
+    render(<DaybreakBooking api="/api/u/sam" slug="meet" home={{ href: "/u/sam", label: "All links" }} fetch={fetch} />);
+    expect((await screen.findByRole("link", { name: "All links" })).getAttribute("href")).toBe("/u/sam");
   });
 
   it("says a closed link is closed, in the proxy's words", async () => {

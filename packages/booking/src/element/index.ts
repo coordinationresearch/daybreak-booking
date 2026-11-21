@@ -19,8 +19,9 @@ import { BOOKING_CSS } from "../react/styles.js";
  * - `heading`: `off` hides the link's title and the line under it.
  * - `link-href`: where each listed link goes, with `{slug}` in it, as `/u/sam/{slug}`.
  * - `photo`: the host's photo, square. Without it, the host's initials.
- * - `home-href` and `home-label`: the way back to the host's site, on the
- *   closed page and the ticket's back, as `/` and `example.com`.
+ * - `home-href` and `home-label`: the way back to the host's site from the
+ *   closed page, as `/` and `example.com`. The ticket's back no longer uses
+ *   them: it's Daybreak's word, linked to Daybreak's site.
  *
  * It draws in a shadow root, so a page's own styles don't reach in, while
  * the `--dbk-*` custom properties do. Cloudflare's widget draws in the light

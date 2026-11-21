@@ -12,7 +12,8 @@ export type MeetHost = {
   photo?: string;
   /** The host's name, for the initials. */
   name?: string;
-  /** The quiet way out, to the host's site, as the ticket's back link. */
+  /** The quiet way out, to the host's site, from the closed page. (The
+   * ticket's back, which /meet links to its site, goes to Daybreak's.) */
   home?: { href: string; label: string };
   theme: "light" | "dark";
 };
